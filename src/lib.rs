@@ -35,8 +35,8 @@ pub mod serializer;
 pub mod types;
 
 // Re-export commonly used types and functions for convenience
-pub use error::{JsonError, ParseOptions, Result};
-pub use parser::{parse, parse_with_length, parse_with_opts};
+pub use error::{JsonError, Result};
+pub use parser::{parse, parse_with_length, parse_with_opts, ParseOptions};
 pub use serializer::{minify, print, print_unformatted};
 pub use types::JsonNode;
 

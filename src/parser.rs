@@ -245,7 +245,7 @@ impl<'a> Parser<'a> {
         self.expect_char('"')?;
 
         let mut result = String::new();
-        let start = self.position;
+        let _start = self.position;
 
         while let Some(c) = self.peek() {
             match c {
@@ -484,14 +484,18 @@ impl<'a> Parser<'a> {
 
         let value = self.parse_value()?;
 
-        // Check for null terminator if required
+        // Skip trailing whitespace
         self.skip_whitespace();
-        if self.options.require_null_terminated {
-            if !self.is_eof() {
+
+        // Check if we've consumed the entire input
+        if !self.is_eof() {
+            if self.options.require_null_terminated {
                 return Err(JsonError::ExpectedNullTerminator {
                     position: self.position,
                 });
             }
+            // When require_null_terminated is false, we allow trailing characters
+            // Just return the parsed value without checking for extra content
         }
 
         Ok(value)
@@ -641,10 +645,16 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_with_opts_null_terminated() {
+    fn test_parse_with_options() {
+        // 要求 null 终止符
         let opts = ParseOptions::new().with_null_terminated(true);
         let result = parse_with_opts("null extra", opts);
         assert!(result.is_err());
+
+        // 不要求 null 终止符
+        let opts = ParseOptions::new().with_null_terminated(false);
+        let result = parse_with_opts("null extra", opts);
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -692,5 +702,13 @@ mod tests {
     fn test_duplicate_key() {
         let result = parse(r#"{"key": 1, "key": 2}"#);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_json() {
+        assert!(parse("{").is_err()); // 未闭合的对象
+        assert!(parse("[").is_err()); // 未闭合的数组
+        assert!(parse(r#""unclosed string"#).is_err()); // 未闭合的字符串
+        assert!(parse("123abc").is_err()); // 无效的数字后缀
     }
 }
