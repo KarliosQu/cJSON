@@ -168,7 +168,7 @@ pub fn minify(json: &str) -> Result<String, String> {
     let mut in_string = false;
     let mut in_escape = false;
 
-    for (i, c) in json.chars().enumerate() {
+    for (_i, c) in json.chars().enumerate() {
         match c {
             '"' if !in_escape => {
                 in_string = !in_string;
