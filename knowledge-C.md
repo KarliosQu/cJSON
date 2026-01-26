@@ -1,4 +1,4 @@
-提示词：分析一下目前C项目（cjson）的代码架构和功能点，整理出一份项目详情readme.MD文档
+*提示词：分析一下目前C项目（cjson）的代码架构和功能点，整理出一份项目详情readme.MD文档*
 
 # cJSON - 超轻量级 ANSI C JSON 解析器
 
@@ -88,8 +88,7 @@ cJSON *cJSON_Parse(const char *value);
 cJSON *cJSON_ParseWithLength(const char *value, size_t buffer_length);
 
 // 带选项的解析
-cJSON *cJSON_ParseWithOpts(const char *value, const char **return_parse_end, 
-                          cJSON_bool require_null_terminated);
+cJSON *cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cJSON_bool require_null_terminated);
 ```
 
 ### 2. 生成功能 (Printing)
@@ -107,8 +106,7 @@ char *cJSON_PrintUnformatted(const cJSON *item);
 char *cJSON_PrintBuffered(const cJSON *item, int prebuffer, cJSON_bool fmt);
 
 // 预分配缓冲区输出
-cJSON_bool cJSON_PrintPreallocated(cJSON *item, char *buffer, 
-                                  const int length, const cJSON_bool format);
+cJSON_bool cJSON_PrintPreallocated(cJSON *item, char *buffer, const int length, const cJSON_bool format);
 ```
 
 ### 3. 创建功能 (Creation)

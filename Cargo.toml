@@ -1,0 +1,18 @@
+[package]
+name = "lx-json"
+version = "0.1.0"
+edition = "2021"
+authors = ["灵犀"]
+description = "A lightweight JSON parser in Rust, inspired by cJSON"
+license = "MIT"
+repository = "https://github.com/lingxi/lx-json"
+keywords = ["json", "parser", "serde"]
+categories = ["parser-implementations", "encoding"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
