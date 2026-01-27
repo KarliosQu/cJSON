@@ -411,6 +411,152 @@ assert_eq!(node.len(), 3);
 
 **验收标准**: 值访问函数能够正确获取 JSON 值。
 
+### 4.6 JSON 生成功能
+
+#### 测试用例 1: 动态添加元素到数组
+
+```rust
+use lx_json::JsonNode;
+
+let mut arr = JsonNode::new_array();
+arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
+arr.add_item_to_array(JsonNode::String("hello".to_string())).unwrap();
+arr.add_item_to_array(JsonNode::Bool(true)).unwrap();
+
+assert_eq!(arr.len(), 3);
+assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.0)));
+assert_eq!(arr.get_at(1), Some(&JsonNode::String("hello".to_string())));
+assert_eq!(arr.get_at(2), Some(&JsonNode::Bool(true)));
+```
+
+**验收标准**: 能够动态添加元素到数组，支持所有 JSON 类型。
+
+#### 测试用例 2: 动态添加元素到对象
+
+```rust
+use lx_json::JsonNode;
+
+let mut obj = JsonNode::new_object();
+obj.add_item_to_object("name", JsonNode::String("Alice".to_string())).unwrap();
+obj.add_item_to_object("age", JsonNode::Number(30.0)).unwrap();
+
+assert_eq!(obj.len(), 2);
+assert_eq!(obj.get("name"), Some(&JsonNode::String("Alice".to_string())));
+assert_eq!(obj.get("age"), Some(&JsonNode::Number(30.0)));
+```
+
+**验收标准**: 能够动态添加键值对到对象，支持所有 JSON 类型。
+
+#### 测试用例 3: 便捷对象字段添加方法
+
+```rust
+use lx_json::JsonNode;
+
+let mut obj = JsonNode::new_object();
+obj.add_string_to_object("name", "Alice").unwrap();
+obj.add_number_to_object("age", 30.0).unwrap();
+obj.add_bool_to_object("active", true).unwrap();
+
+assert_eq!(obj.len(), 3);
+assert_eq!(obj.get("name"), Some(&JsonNode::String("Alice".to_string())));
+assert_eq!(obj.get("age"), Some(&JsonNode::Number(30.0)));
+assert_eq!(obj.get("active"), Some(&JsonNode::Bool(true)));
+```
+
+**验收标准**: 便捷方法能够正确添加对应类型的字段到对象。
+
+#### 测试用例 4: 批量创建数组
+
+```rust
+use lx_json::JsonNode;
+
+// 批量创建整数数组
+let int_arr = JsonNode::create_int_array(&[1, 2, 3, 4, 5]);
+assert_eq!(int_arr.len(), 5);
+assert_eq!(int_arr.get_at(0), Some(&JsonNode::Number(1.0)));
+
+// 批量创建浮点数数组
+let float_arr = JsonNode::create_float_array(&[1.1f32, 2.2f32, 3.3f32]);
+assert_eq!(float_arr.len(), 3);
+assert_eq!(float_arr.get_at(0), Some(&JsonNode::Number(1.1)));
+
+// 批量创建双精度数组
+let double_arr = JsonNode::create_double_array(&[1.5, 2.5, 3.5, 4.5]);
+assert_eq!(double_arr.len(), 4);
+assert_eq!(double_arr.get_at(0), Some(&JsonNode::Number(1.5)));
+
+// 批量创建字符串数组
+let str_arr = JsonNode::create_string_array(&["hello", "world", "rust"]);
+assert_eq!(str_arr.len(), 3);
+assert_eq!(str_arr.get_at(0), Some(&JsonNode::String("hello".to_string())));
+```
+
+**验收标准**: 批量创建数组方法能够正确从切片创建数组。
+
+#### 测试用例 5: 类型错误处理
+
+```rust
+use lx_json::{JsonNode, JsonError};
+
+// 尝试向非数组添加元素
+let mut node = JsonNode::new_object();
+let result = node.add_item_to_array(JsonNode::Number(1.0));
+assert!(result.is_err());
+match result {
+    Err(JsonError::InvalidType { expected, found }) => {
+        assert_eq!(expected, "Array");
+        assert_eq!(found, "Object");
+    }
+    _ => panic!("Expected InvalidType error"),
+}
+
+// 尝试向非对象添加键值对
+let mut node = JsonNode::new_array();
+let result = node.add_item_to_object("key", JsonNode::String("value".to_string()));
+assert!(result.is_err());
+match result {
+    Err(JsonError::InvalidType { expected, found }) => {
+        assert_eq!(expected, "Object");
+        assert_eq!(found, "Array");
+    }
+    _ => panic!("Expected InvalidType error"),
+}
+```
+
+**验收标准**: 类型不匹配时返回明确的 `InvalidType` 错误信息。
+
+#### 测试用例 6: 链式调用构建复杂 JSON
+
+```rust
+use lx_json::JsonNode;
+
+// 构建复杂 JSON 结构
+let mut root = JsonNode::new_object();
+root.add_string_to_object("name", "Alice").unwrap();
+root.add_number_to_object("age", 30.0).unwrap();
+root.add_bool_to_object("active", true).unwrap();
+
+// 添加数组
+let mut hobbies = JsonNode::new_array();
+hobbies.add_item_to_array(JsonNode::String("reading".to_string())).unwrap();
+hobbies.add_item_to_array(JsonNode::String("gaming".to_string())).unwrap();
+root.add_item_to_object("hobbies", hobbies).unwrap();
+
+// 添加嵌套对象
+let mut address = JsonNode::new_object();
+address.add_string_to_object("city", "New York").unwrap();
+address.add_string_to_object("country", "USA").unwrap();
+root.add_item_to_object("address", address).unwrap();
+
+// 验证结构
+assert_eq!(root.len(), 4);
+assert_eq!(root.get("name").and_then(|v| v.as_string()), Some("Alice"));
+assert_eq!(root.get("age").and_then(|v| v.as_number()), Some(30.0));
+assert_eq!(root.get("active").and_then(|v| v.as_bool()), Some(true));
+```
+
+**验收标准**: 支持通过链式调用构建复杂的 JSON 结构。
+
 ## 5. 验收标准总结
 
 所有测试用例必须通过，且满足以下条件：
@@ -429,6 +575,11 @@ assert_eq!(node.len(), 3);
 12. ✅ 代码符合 Rust 惯用风格，无 unsafe 代码
 13. ✅ 完善的错误处理，使用 Result<T, E>
 14. ✅ 遵守 Rust 的所有权和借用规则
+15. ✅ 支持动态添加元素到数组（`add_item_to_array()`）
+16. ✅ 支持动态添加元素到对象（`add_item_to_object()`）
+17. ✅ 提供便捷的对象字段添加方法（`add_string_to_object()`, `add_number_to_object()`, `add_bool_to_object()`）
+18. ✅ 支持批量创建数组（`create_int_array()`, `create_float_array()`, `create_double_array()`, `create_string_array()`）
+19. ✅ 正确处理类型不匹配错误，返回 `InvalidType` 错误
 
 ## 6. 验收命令
 

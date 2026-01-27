@@ -1,5 +1,8 @@
 use std::fmt;
 
+use crate::error::Result;
+use crate::JsonError;
+
 /// JSON value types
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonNode {
@@ -179,6 +182,102 @@ impl JsonNode {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Get the type name of the JsonNode as a string
+    fn type_name(&self) -> &'static str {
+        match self {
+            JsonNode::Null => "Null",
+            JsonNode::Bool(_) => "Bool",
+            JsonNode::Number(_) => "Number",
+            JsonNode::String(_) => "String",
+            JsonNode::Array(_) => "Array",
+            JsonNode::Object(_) => "Object",
+            JsonNode::Raw(_) => "Raw",
+        }
+    }
+
+    /// Add an item to the array
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an array
+    pub fn add_item_to_array(&mut self, item: JsonNode) -> Result<()> {
+        match self {
+            JsonNode::Array(arr) => {
+                arr.push(item);
+                Ok(())
+            }
+            _ => Err(JsonError::InvalidType {
+                expected: "Array".to_string(),
+                found: self.type_name().to_string(),
+            }),
+        }
+    }
+
+    /// Add an item to the object with the given key
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    pub fn add_item_to_object(&mut self, key: impl Into<String>, item: JsonNode) -> Result<()> {
+        match self {
+            JsonNode::Object(pairs) => {
+                pairs.push((key.into(), item));
+                Ok(())
+            }
+            _ => Err(JsonError::InvalidType {
+                expected: "Object".to_string(),
+                found: self.type_name().to_string(),
+            }),
+        }
+    }
+
+    /// Add a string to the object with the given key
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    pub fn add_string_to_object(&mut self, key: impl Into<String>, value: &str) -> Result<()> {
+        self.add_item_to_object(key, JsonNode::String(value.to_string()))
+    }
+
+    /// Add a number to the object with the given key
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    pub fn add_number_to_object(&mut self, key: impl Into<String>, value: f64) -> Result<()> {
+        self.add_item_to_object(key, JsonNode::Number(value))
+    }
+
+    /// Add a boolean to the object with the given key
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    pub fn add_bool_to_object(&mut self, key: impl Into<String>, value: bool) -> Result<()> {
+        self.add_item_to_object(key, JsonNode::Bool(value))
+    }
+
+    /// Create an array from a slice of i64 values
+    pub fn create_int_array(values: &[i64]) -> Self {
+        JsonNode::Array(values.iter().map(|&v| JsonNode::Number(v as f64)).collect())
+    }
+
+    /// Create an array from a slice of f32 values
+    pub fn create_float_array(values: &[f32]) -> Self {
+        JsonNode::Array(values.iter().map(|&v| JsonNode::Number(v as f64)).collect())
+    }
+
+    /// Create an array from a slice of f64 values
+    pub fn create_double_array(values: &[f64]) -> Self {
+        JsonNode::Array(values.iter().map(|&v| JsonNode::Number(v)).collect())
+    }
+
+    /// Create an array from a slice of string references
+    pub fn create_string_array(values: &[&str]) -> Self {
+        JsonNode::Array(values.iter().map(|&v| JsonNode::String(v.to_string())).collect())
+    }
 }
 
 impl Default for JsonNode {
@@ -272,5 +371,129 @@ mod tests {
         assert_eq!(JsonNode::new_string("hello"), JsonNode::String("hello".to_string()));
         assert_eq!(JsonNode::new_array(), JsonNode::Array(vec![]));
         assert_eq!(JsonNode::new_object(), JsonNode::Object(vec![]));
+    }
+
+    #[test]
+    fn test_add_item_to_array() {
+        use crate::error::Result;
+        
+        let mut arr = JsonNode::new_array();
+        arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
+        arr.add_item_to_array(JsonNode::String("hello".to_string())).unwrap();
+        arr.add_item_to_array(JsonNode::Bool(true)).unwrap();
+        
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.0)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::String("hello".to_string())));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Bool(true)));
+    }
+
+    #[test]
+    fn test_add_item_to_array_invalid_type() {
+        use crate::error::JsonError;
+        
+        let mut node = JsonNode::new_object();
+        let result = node.add_item_to_array(JsonNode::Number(1.0));
+        
+        assert!(result.is_err());
+        match result {
+            Err(JsonError::InvalidType { expected, found }) => {
+                assert_eq!(expected, "Array");
+                assert_eq!(found, "Object");
+            }
+            _ => panic!("Expected InvalidType error"),
+        }
+    }
+
+    #[test]
+    fn test_add_item_to_object() {
+        use crate::error::Result;
+        
+        let mut obj = JsonNode::new_object();
+        obj.add_item_to_object("name", JsonNode::String("Alice".to_string())).unwrap();
+        obj.add_item_to_object("age", JsonNode::Number(30.0)).unwrap();
+        
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj.get("name"), Some(&JsonNode::String("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&JsonNode::Number(30.0)));
+    }
+
+    #[test]
+    fn test_add_item_to_object_invalid_type() {
+        use crate::error::JsonError;
+        
+        let mut node = JsonNode::new_array();
+        let result = node.add_item_to_object("key", JsonNode::String("value".to_string()));
+        
+        assert!(result.is_err());
+        match result {
+            Err(JsonError::InvalidType { expected, found }) => {
+                assert_eq!(expected, "Object");
+                assert_eq!(found, "Array");
+            }
+            _ => panic!("Expected InvalidType error"),
+        }
+    }
+
+    #[test]
+    fn test_convenience_add_methods() {
+        use crate::error::Result;
+        
+        let mut obj = JsonNode::new_object();
+        obj.add_string_to_object("name", "Alice").unwrap();
+        obj.add_number_to_object("age", 30.0).unwrap();
+        obj.add_bool_to_object("active", true).unwrap();
+        
+        assert_eq!(obj.len(), 3);
+        assert_eq!(obj.get("name"), Some(&JsonNode::String("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&JsonNode::Number(30.0)));
+        assert_eq!(obj.get("active"), Some(&JsonNode::Bool(true)));
+    }
+
+    #[test]
+    fn test_create_int_array() {
+        let values: &[i64] = &[1, 2, 3, 4, 5];
+        let arr = JsonNode::create_int_array(values);
+        
+        assert_eq!(arr.len(), 5);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.0)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.0)));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.0)));
+        assert_eq!(arr.get_at(3), Some(&JsonNode::Number(4.0)));
+        assert_eq!(arr.get_at(4), Some(&JsonNode::Number(5.0)));
+    }
+
+    #[test]
+    fn test_create_float_array() {
+        let values: &[f32] = &[1.1, 2.2, 3.3];
+        let arr = JsonNode::create_float_array(values);
+        
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.1)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.2)));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.3)));
+    }
+
+    #[test]
+    fn test_create_double_array() {
+        let values: &[f64] = &[1.5, 2.5, 3.5, 4.5];
+        let arr = JsonNode::create_double_array(values);
+        
+        assert_eq!(arr.len(), 4);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.5)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.5)));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.5)));
+        assert_eq!(arr.get_at(3), Some(&JsonNode::Number(4.5)));
+    }
+
+    #[test]
+    fn test_create_string_array() {
+        let values: &[&str] = &["hello", "world", "rust"];
+        let arr = JsonNode::create_string_array(values);
+        
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::String("hello".to_string())));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::String("world".to_string())));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::String("rust".to_string())));
     }
 }
