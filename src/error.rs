@@ -52,6 +52,11 @@ pub enum JsonError {
     ExpectedNullTerminator {
         position: usize,
     },
+    /// Invalid type for operation
+    InvalidType {
+        expected: String,
+        found: String,
+    },
 }
 
 impl fmt::Display for JsonError {
@@ -109,6 +114,13 @@ impl fmt::Display for JsonError {
                     f,
                     "Expected null terminator at position {}",
                     position
+                )
+            }
+            JsonError::InvalidType { expected, found } => {
+                write!(
+                    f,
+                    "Invalid type: expected '{}', found '{}'",
+                    expected, found
                 )
             }
         }
