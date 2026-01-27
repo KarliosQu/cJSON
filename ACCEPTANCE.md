@@ -557,6 +557,189 @@ assert_eq!(root.get("active").and_then(|v| v.as_bool()), Some(true));
 
 **验收标准**: 支持通过链式调用构建复杂的 JSON 结构。
 
+#### 测试用例 7: 便捷null/true/false/raw添加方法
+
+```rust
+use lx_json::JsonNode;
+
+let mut obj = JsonNode::new_object();
+obj.add_null_to_object("nullable").unwrap();
+obj.add_true_to_object("flag_true").unwrap();
+obj.add_false_to_object("flag_false").unwrap();
+obj.add_raw_to_object("raw_json", r#"{\"nested\": \"value\"}"#).unwrap();
+
+assert_eq!(obj.len(), 4);
+assert_eq!(obj.get("nullable"), Some(&JsonNode::Null));
+assert_eq!(obj.get("flag_true"), Some(&JsonNode::Bool(true)));
+assert_eq!(obj.get("flag_false"), Some(&JsonNode::Bool(false)));
+assert_eq!(obj.get("raw_json").and_then(|v| v.as_string()), Some(r#"{\"nested\": \"value\"}"#));
+```
+
+**验收标准**: 便捷方法能够正确添加 null、true、false 和 raw JSON 值到对象。
+
+#### 测试用例 8: 数组删除和分离操作
+
+```rust
+use lx_json::JsonNode;
+
+let mut arr = JsonNode::new_array();
+arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
+arr.add_item_to_array(JsonNode::Number(2.0)).unwrap();
+arr.add_item_to_array(JsonNode::Number(3.0)).unwrap();
+arr.add_item_to_array(JsonNode::Number(4.0)).unwrap();
+
+assert_eq!(arr.len(), 4);
+
+// 删除索引2的元素（值为3.0）
+arr.delete_item_from_array(2).unwrap();
+assert_eq!(arr.len(), 3);
+assert_eq!(arr.get_at(2), Some(&JsonNode::Number(4.0)));
+
+// 分离索引0的元素（值为1.0）
+let detached = arr.detach_item_from_array(0).unwrap();
+assert_eq!(detached, JsonNode::Number(1.0));
+assert_eq!(arr.len(), 2);
+```
+
+**验收标准**: 能够正确从数组中删除和分离元素，`delete` 会直接删除，`detach` 会返回被删除的元素的所有权。
+
+#### 测试用例 9: 对象删除和分离操作
+
+```rust
+use lx_json::JsonNode;
+
+let mut obj = JsonNode::new_object();
+obj.add_string_to_object("name", "Alice").unwrap();
+obj.add_number_to_object("age", 30.0).unwrap();
+obj.add_bool_to_object("active", true).unwrap();
+
+assert_eq!(obj.len(), 3);
+
+// 删除键 "age"
+obj.delete_item_from_object("age").unwrap();
+assert_eq!(obj.len(), 2);
+assert_eq!(obj.get("age"), None);
+
+// 分离键 "name"
+let detached = obj.detach_item_from_object("name").unwrap();
+assert_eq!(detached, JsonNode::String("Alice".to_string()));
+assert_eq!(obj.len(), 1);
+```
+
+**验收标准**: 能够正确从对象中删除和分离键值对，`delete` 会直接删除，`detach` 会返回被删除的值的所有权。
+
+#### 测试用例 10: 数组替换和插入操作
+
+```rust
+use lx_json::JsonNode;
+
+let mut arr = JsonNode::new_array();
+arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
+arr.add_item_to_array(JsonNode::Number(2.0)).unwrap();
+arr.add_item_to_array(JsonNode::Number(3.0)).unwrap();
+
+// 替换索引1的元素
+arr.replace_item_in_array(1, JsonNode::Number(20.0)).unwrap();
+assert_eq!(arr.get_at(1), Some(&JsonNode::Number(20.0)));
+
+// 在索引1处插入新元素
+arr.insert_item_in_array(1, JsonNode::String("inserted".to_string())).unwrap();
+assert_eq!(arr.len(), 4);
+assert_eq!(arr.get_at(1), Some(&JsonNode::String("inserted".to_string())));
+assert_eq!(arr.get_at(2), Some(&JsonNode::Number(20.0)));
+```
+
+**验收标准**: 能够正确替换数组中的元素和在指定位置插入新元素。
+
+#### 测试用例 11: 对象替换操作
+
+```rust
+use lx_json::JsonNode;
+
+let mut obj = JsonNode::new_object();
+obj.add_string_to_object("name", "Alice").unwrap();
+obj.add_number_to_object("age", 30.0).unwrap();
+
+// 替换 "age" 的值
+obj.replace_item_in_object("age", JsonNode::Number(25.0)).unwrap();
+assert_eq!(obj.get("age").and_then(|v| v.as_number()), Some(25.0));
+```
+
+**验收标准**: 能够正确替换对象中指定键的值。
+
+#### 测试用例 12: 高级打印功能
+
+```rust
+use lx_json::{JsonNode, print, print_unformatted, print_buffered, print_preallocated};
+
+let obj = JsonNode::new_object();
+let formatted = print(&obj);
+let unformatted = print_unformatted(&obj);
+
+// 测试 print_buffered
+let buffered = print_buffered(&obj, 100, true);
+assert_eq!(buffered, formatted);
+
+let buffered_unformatted = print_buffered(&obj, 100, false);
+assert_eq!(buffered_unformatted, unformatted);
+
+// 测试 print_preallocated - 长度足够时返回 Some
+let result = print_preallocated(&obj, 100, true);
+assert!(result.is_some());
+assert_eq!(result.unwrap(), formatted);
+
+// 测试 print_preallocated - 长度不足时返回 None
+let result = print_preallocated(&obj, 1, true);
+assert!(result.is_none());
+```
+
+**验收标准**: `print_buffered` 能够使用预分配的缓冲区进行序列化，`print_preallocated` 能够检查序列化结果是否在指定长度范围内。
+
+#### 测试用例 13: 错误处理（索引越界、键不存在）
+
+```rust
+use lx_json::{JsonNode, JsonError};
+
+let mut arr = JsonNode::new_array();
+arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
+
+// 测试索引越界
+let result = arr.delete_item_from_array(5);
+assert!(result.is_err());
+match result {
+    Err(JsonError::IndexOutOfBounds { index, length }) => {
+        assert_eq!(index, 5);
+        assert_eq!(length, 1);
+    }
+    _ => panic!("Expected IndexOutOfBounds error"),
+}
+
+// 测试插入索引越界（大于长度）
+let result = arr.insert_item_in_array(5, JsonNode::Number(2.0));
+assert!(result.is_err());
+
+let mut obj = JsonNode::new_object();
+obj.add_string_to_object("name", "Alice").unwrap();
+
+// 测试键不存在
+let result = obj.delete_item_from_object("nonexistent");
+assert!(result.is_err());
+match result {
+    Err(JsonError::KeyNotFound { key }) => {
+        assert_eq!(key, "nonexistent");
+    }
+    _ => panic!("Expected KeyNotFound error"),
+}
+
+let result = obj.replace_item_in_object("nonexistent", JsonNode::String("Bob".to_string()));
+assert!(result.is_err());
+
+let result = obj.detach_item_from_object("nonexistent");
+assert!(result.is_err());
+```
+
+**验收标准**: 能够正确处理索引越界和键不存在的错误情况，返回精确的错误信息。
+
 ## 5. 验收标准总结
 
 所有测试用例必须通过，且满足以下条件：
@@ -577,6 +760,22 @@ assert_eq!(root.get("active").and_then(|v| v.as_bool()), Some(true));
 14. ✅ 遵守 Rust 的所有权和借用规则
 15. ✅ 支持动态添加元素到数组（`add_item_to_array()`）
 16. ✅ 支持动态添加元素到对象（`add_item_to_object()`）
+17. ✅ 支持便捷方法添加字段（`add_string_to_object()`, `add_number_to_object()`, `add_bool_to_object()`）
+18. ✅ 支持便捷方法添加 null/true/false/raw（`add_null_to_object()`, `add_true_to_object()`, `add_false_to_object()`, `add_raw_to_object()`）
+19. ✅ 支持数组删除操作（`delete_item_from_array()`）
+20. ✅ 支持数组分离操作（`detach_item_from_array()`）
+21. ✅ 支持对象删除操作（`delete_item_from_object()`）
+22. ✅ 支持对象分离操作（`detach_item_from_object()`）
+23. ✅ 支持数组替换操作（`replace_item_in_array()`）
+24. ✅ 支持对象替换操作（`replace_item_in_object()`）
+25. ✅ 支持数组插入操作（`insert_item_in_array()`）
+26. ✅ 提供缓冲式打印功能（`print_buffered()`）
+27. ✅ 提供预分配缓冲区打印功能（`print_preallocated()`）
+28. ✅ 支持索引越界错误（`IndexOutOfBounds`）
+29. ✅ 支持键不存在错误（`KeyNotFound`）
+30. ✅ 支持批量创建数组（`create_int_array()`, `create_float_array()`, `create_double_array()`, `create_string_array()`）
+31. ✅ 支持类型检查方法（`is_null()`, `is_bool()`, `is_number()`, `is_string()`, `is_array()`, `is_object()`）
+32. ✅ 支持值访问方法（`as_string()`, `as_number()`, `as_bool()`, `as_array()`, `as_object()`）
 17. ✅ 提供便捷的对象字段添加方法（`add_string_to_object()`, `add_number_to_object()`, `add_bool_to_object()`）
 18. ✅ 支持批量创建数组（`create_int_array()`, `create_float_array()`, `create_double_array()`, `create_string_array()`）
 19. ✅ 正确处理类型不匹配错误，返回 `InvalidType` 错误

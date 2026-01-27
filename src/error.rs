@@ -57,6 +57,15 @@ pub enum JsonError {
         expected: String,
         found: String,
     },
+    /// Index out of bounds
+    IndexOutOfBounds {
+        index: usize,
+        length: usize,
+    },
+    /// Key not found in object
+    KeyNotFound {
+        key: String,
+    },
 }
 
 impl fmt::Display for JsonError {
@@ -123,6 +132,16 @@ impl fmt::Display for JsonError {
                     expected, found
                 )
             }
+            JsonError::IndexOutOfBounds { index, length } => {
+                write!(
+                    f,
+                    "Index out of bounds: index {}, length {}",
+                    index, length
+                )
+            }
+            JsonError::KeyNotFound { key } => {
+                write!(f, "Key '{}' not found", key)
+            }
         }
     }
 }
@@ -131,25 +150,3 @@ impl std::error::Error for JsonError {}
 
 /// Result type alias for JSON operations
 pub type Result<T> = std::result::Result<T, JsonError>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_error_display() {
-        let err = JsonError::UnexpectedEndOfInput {
-            position: 10,
-            expected: "value".to_string(),
-        };
-        assert!(err.to_string().contains("Unexpected end of input"));
-        assert!(err.to_string().contains("position 10"));
-
-        let err2 = JsonError::InvalidNumber {
-            position: 5,
-            reason: "Invalid digit".to_string(),
-        };
-        assert!(err2.to_string().contains("Invalid number"));
-        assert!(err2.to_string().contains("position 5"));
-    }
-}

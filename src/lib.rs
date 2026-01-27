@@ -37,35 +37,11 @@ pub mod types;
 // Re-export commonly used types and functions for convenience
 pub use error::{JsonError, Result};
 pub use parser::{parse, parse_with_length, parse_with_opts, ParseOptions};
-pub use serializer::{minify, print, print_unformatted};
+pub use serializer::{minify, print, print_unformatted, print_buffered, print_preallocated};
 pub use types::JsonNode;
 
 /// Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_version() {
-        assert!(!VERSION.is_empty());
-    }
-
-    #[test]
-    fn test_basic_parsing() {
-        let json = r#"{"key": "value"}"#;
-        let result = parse(json);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_basic_serialization() {
-        let node = JsonNode::Object(vec![
-            ("key".to_string(), JsonNode::String("value".to_string())),
-        ]);
-        let output = print(&node);
-        assert!(output.contains("key"));
-        assert!(output.contains("value"));
-    }
-}
+mod tests;
