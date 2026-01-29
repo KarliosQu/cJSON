@@ -30,15 +30,26 @@
 //! ```
 
 pub mod error;
+pub mod merge;
 pub mod parser;
+pub mod patch;
+pub mod query;
 pub mod serializer;
 pub mod types;
+pub mod utils;
 
 // Re-export commonly used types and functions for convenience
 pub use error::{JsonError, Result};
+pub use merge::merge_patch;
 pub use parser::{parse, parse_with_length, parse_with_opts, ParseOptions};
-pub use serializer::{minify, print, print_unformatted};
+pub use patch::{add_patch_to_array, apply_patches, generate_patches};
+pub use query::{
+    get_array_item, get_array_size, get_number_value, get_object_item,
+    get_object_item_case_sensitive, get_pointer, get_string_value, has_object_item,
+};
+pub use serializer::{minify, print, print_buffered, print_preallocated, print_unformatted};
 pub use types::JsonNode;
+pub use utils::{compare, duplicate};
 
 /// Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

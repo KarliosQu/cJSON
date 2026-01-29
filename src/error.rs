@@ -1,4 +1,5 @@
 use std::fmt;
+use crate::types::JsonNode;
 
 /// JSON parsing error types
 #[derive(Debug, Clone, PartialEq)]
@@ -56,6 +57,33 @@ pub enum JsonError {
     InvalidType {
         expected: String,
         found: String,
+    },
+    /// Index out of bounds for array operation
+    IndexOutOfBounds {
+        index: usize,
+        length: usize,
+    },
+    /// Key not found in object
+    KeyNotFound {
+        key: String,
+    },
+    /// Invalid patch operation
+    InvalidPatchOperation {
+        operation: String,
+    },
+    /// Patch path not found
+    PatchPathNotFound {
+        path: String,
+    },
+    /// Patch test failed
+    PatchTestFailed {
+        path: String,
+        expected: JsonNode,
+        found: JsonNode,
+    },
+    /// Merge error
+    MergeError {
+        message: String,
     },
 }
 
@@ -121,6 +149,48 @@ impl fmt::Display for JsonError {
                     f,
                     "Invalid type: expected '{}', found '{}'",
                     expected, found
+                )
+            }
+            JsonError::IndexOutOfBounds { index, length } => {
+                write!(
+                    f,
+                    "Index out of bounds: index {} is not valid for length {}",
+                    index, length
+                )
+            }
+            JsonError::KeyNotFound { key } => {
+                write!(
+                    f,
+                    "Key not found: '{}'",
+                    key
+                )
+            }
+            JsonError::InvalidPatchOperation { operation } => {
+                write!(
+                    f,
+                    "Invalid patch operation: '{}'",
+                    operation
+                )
+            }
+            JsonError::PatchPathNotFound { path } => {
+                write!(
+                    f,
+                    "Patch path not found: '{}'",
+                    path
+                )
+            }
+            JsonError::PatchTestFailed { path, expected, found } => {
+                write!(
+                    f,
+                    "Patch test failed at path '{}': expected {:?}, found {:?}",
+                    path, expected, found
+                )
+            }
+            JsonError::MergeError { message } => {
+                write!(
+                    f,
+                    "Merge error: {}",
+                    message
                 )
             }
         }

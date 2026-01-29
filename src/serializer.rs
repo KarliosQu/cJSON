@@ -198,6 +198,38 @@ pub fn minify(json: &str) -> Result<String, String> {
     Ok(result)
 }
 
+/// Serialize a JsonNode to a JSON string with pre-allocated buffer capacity
+/// 
+/// # Arguments
+/// * `node` - The JsonNode to serialize
+/// * `prebuffer` - The initial buffer capacity to allocate
+/// * `fmt` - Whether to format the output with indentation
+/// 
+/// # Returns
+/// A String containing the serialized JSON
+pub fn print_buffered(node: &JsonNode, prebuffer: usize, fmt: bool) -> String {
+    let mut serializer = Serializer::new(fmt, 2);
+    let mut result = String::with_capacity(prebuffer);
+    serializer.serialize_node(node, 0, &mut result);
+    result
+}
+
+/// Serialize a JsonNode into a pre-allocated buffer
+/// 
+/// # Arguments
+/// * `node` - The JsonNode to serialize
+/// * `buffer` - A mutable String buffer to write the result into
+/// * `fmt` - Whether to format the output with indentation
+/// 
+/// # Returns
+/// Ok(()) if successful, Err(JsonError) if the buffer is too small
+pub fn print_preallocated(node: &JsonNode, buffer: &mut String, fmt: bool) -> Result<(), crate::JsonError> {
+    let mut serializer = Serializer::new(fmt, 2);
+    buffer.clear();
+    serializer.serialize_node(node, 0, buffer);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
