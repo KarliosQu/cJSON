@@ -53,6 +53,10 @@ pub enum JsonError {
     ExpectedNullTerminator {
         position: usize,
     },
+    /// Trailing characters after JSON document
+    TrailingCharacters {
+        position: usize,
+    },
     /// Invalid type for operation
     InvalidType {
         expected: String,
@@ -141,6 +145,13 @@ impl fmt::Display for JsonError {
                 write!(
                     f,
                     "Expected null terminator at position {}",
+                    position
+                )
+            }
+            JsonError::TrailingCharacters { position } => {
+                write!(
+                    f,
+                    "Trailing characters after JSON document at position {}",
                     position
                 )
             }

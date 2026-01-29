@@ -256,8 +256,8 @@ mod tests {
 
     #[test]
     fn test_print_string() {
-        assert_eq!(print(&JsonNode::String("hello")), r#""hello""#);
-        assert_eq!(print(&JsonNode::String("hello\nworld")), r#""hello\nworld""#);
+        assert_eq!(print(&JsonNode::String("hello".to_string())), r#""hello""#);
+        assert_eq!(print(&JsonNode::String("hello\nworld".to_string())), r#""hello\nworld""#);
     }
 
     #[test]
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_print_object() {
         let obj = JsonNode::Object(vec![
-            ("key".to_string(), JsonNode::String("value")),
+            ("key".to_string(), JsonNode::String("value".to_string())),
         ]);
         let formatted = print(&obj);
         assert!(formatted.contains("{"));
