@@ -1,4 +1,5 @@
 use std::fmt;
+use crate::types::JsonNode;
 
 /// JSON parsing error types
 #[derive(Debug, Clone, PartialEq)]
@@ -57,7 +58,7 @@ pub enum JsonError {
         expected: String,
         found: String,
     },
-    /// Index out of bounds
+    /// Index out of bounds for array operation
     IndexOutOfBounds {
         index: usize,
         length: usize,
@@ -65,6 +66,24 @@ pub enum JsonError {
     /// Key not found in object
     KeyNotFound {
         key: String,
+    },
+    /// Invalid patch operation
+    InvalidPatchOperation {
+        operation: String,
+    },
+    /// Patch path not found
+    PatchPathNotFound {
+        path: String,
+    },
+    /// Patch test failed
+    PatchTestFailed {
+        path: String,
+        expected: JsonNode,
+        found: JsonNode,
+    },
+    /// Merge error
+    MergeError {
+        message: String,
     },
 }
 
@@ -135,12 +154,44 @@ impl fmt::Display for JsonError {
             JsonError::IndexOutOfBounds { index, length } => {
                 write!(
                     f,
-                    "Index out of bounds: index {}, length {}",
+                    "Index out of bounds: index {} is not valid for length {}",
                     index, length
                 )
             }
             JsonError::KeyNotFound { key } => {
-                write!(f, "Key '{}' not found", key)
+                write!(
+                    f,
+                    "Key not found: '{}'",
+                    key
+                )
+            }
+            JsonError::InvalidPatchOperation { operation } => {
+                write!(
+                    f,
+                    "Invalid patch operation: '{}'",
+                    operation
+                )
+            }
+            JsonError::PatchPathNotFound { path } => {
+                write!(
+                    f,
+                    "Patch path not found: '{}'",
+                    path
+                )
+            }
+            JsonError::PatchTestFailed { path, expected, found } => {
+                write!(
+                    f,
+                    "Patch test failed at path '{}': expected {:?}, found {:?}",
+                    path, expected, found
+                )
+            }
+            JsonError::MergeError { message } => {
+                write!(
+                    f,
+                    "Merge error: {}",
+                    message
+                )
             }
         }
     }
@@ -150,3 +201,25 @@ impl std::error::Error for JsonError {}
 
 /// Result type alias for JSON operations
 pub type Result<T> = std::result::Result<T, JsonError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display() {
+        let err = JsonError::UnexpectedEndOfInput {
+            position: 10,
+            expected: "value".to_string(),
+        };
+        assert!(err.to_string().contains("Unexpected end of input"));
+        assert!(err.to_string().contains("position 10"));
+
+        let err2 = JsonError::InvalidNumber {
+            position: 5,
+            reason: "Invalid digit".to_string(),
+        };
+        assert!(err2.to_string().contains("Invalid number"));
+        assert!(err2.to_string().contains("position 5"));
+    }
+}

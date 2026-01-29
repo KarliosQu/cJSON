@@ -12,31 +12,6 @@ pub fn print_unformatted(node: &JsonNode) -> String {
     serializer.serialize(node)
 }
 
-/// Serialize a JsonNode to a JSON string with pre-allocated buffer
-pub fn print_buffered(node: &JsonNode, prebuffer: usize, fmt: bool) -> String {
-    let mut serializer = Serializer::new(fmt, if fmt { 2 } else { 0 });
-    let mut result = String::with_capacity(prebuffer);
-    serializer.serialize_to_string(node, &mut result);
-    result
-}
-
-/// Serialize a JsonNode to a JSON string, checking if it fits in the specified length
-///
-/// Returns None if the serialized string exceeds the specified length
-pub fn print_preallocated(node: &JsonNode, length: usize, format: bool) -> Option<String> {
-    let result = if format {
-        print(node)
-    } else {
-        print_unformatted(node)
-    };
-    
-    if result.len() <= length {
-        Some(result)
-    } else {
-        None
-    }
-}
-
 /// JSON Serializer
 struct Serializer {
     formatted: bool,
@@ -55,10 +30,6 @@ impl Serializer {
         let mut result = String::new();
         self.serialize_node(node, 0, &mut result);
         result
-    }
-
-    fn serialize_to_string(&mut self, node: &JsonNode, result: &mut String) {
-        self.serialize_node(node, 0, result);
     }
 
     fn serialize_node(&mut self, node: &JsonNode, indent: usize, result: &mut String) {
@@ -225,4 +196,131 @@ pub fn minify(json: &str) -> Result<String, String> {
     }
 
     Ok(result)
+}
+
+/// Serialize a JsonNode to a JSON string with pre-allocated buffer capacity
+/// 
+/// # Arguments
+/// * `node` - The JsonNode to serialize
+/// * `prebuffer` - The initial buffer capacity to allocate
+/// * `fmt` - Whether to format the output with indentation
+/// 
+/// # Returns
+/// A String containing the serialized JSON
+pub fn print_buffered(node: &JsonNode, prebuffer: usize, fmt: bool) -> String {
+    let mut serializer = Serializer::new(fmt, 2);
+    let mut result = String::with_capacity(prebuffer);
+    serializer.serialize_node(node, 0, &mut result);
+    result
+}
+
+/// Serialize a JsonNode into a pre-allocated buffer
+/// 
+/// # Arguments
+/// * `node` - The JsonNode to serialize
+/// * `buffer` - A mutable String buffer to write the result into
+/// * `fmt` - Whether to format the output with indentation
+/// 
+/// # Returns
+/// Ok(()) if successful, Err(JsonError) if the buffer is too small
+pub fn print_preallocated(node: &JsonNode, buffer: &mut String, fmt: bool) -> Result<(), crate::JsonError> {
+    let mut serializer = Serializer::new(fmt, 2);
+    buffer.clear();
+    serializer.serialize_node(node, 0, buffer);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_print_null() {
+        let node = JsonNode::Null;
+        assert_eq!(print(&node), "null");
+        assert_eq!(print_unformatted(&node), "null");
+    }
+
+    #[test]
+    fn test_print_bool() {
+        assert_eq!(print(&JsonNode::Bool(true)), "true");
+        assert_eq!(print(&JsonNode::Bool(false)), "false");
+    }
+
+    #[test]
+    fn test_print_number() {
+        assert_eq!(print(&JsonNode::Number(42.0)), "42");
+        assert_eq!(print(&JsonNode::Number(3.14)), "3.14");
+        assert_eq!(print(&JsonNode::Number(-5.5)), "-5.5");
+    }
+
+    #[test]
+    fn test_print_string() {
+        assert_eq!(print(&JsonNode::String("hello")), r#""hello""#);
+        assert_eq!(print(&JsonNode::String("hello\nworld")), r#""hello\nworld""#);
+    }
+
+    #[test]
+    fn test_print_array() {
+        let arr = JsonNode::Array(vec![
+            JsonNode::Number(1.0),
+            JsonNode::Number(2.0),
+            JsonNode::Number(3.0),
+        ]);
+        let formatted = print(&arr);
+        assert!(formatted.contains("["));
+        assert!(formatted.contains("1"));
+        assert!(formatted.contains("2"));
+        assert!(formatted.contains("3"));
+
+        let unformatted = print_unformatted(&arr);
+        assert_eq!(unformatted, "[1,2,3]");
+    }
+
+    #[test]
+    fn test_print_object() {
+        let obj = JsonNode::Object(vec![
+            ("key".to_string(), JsonNode::String("value")),
+        ]);
+        let formatted = print(&obj);
+        assert!(formatted.contains("{"));
+        assert!(formatted.contains("key"));
+        assert!(formatted.contains("value"));
+
+        let unformatted = print_unformatted(&obj);
+        assert_eq!(unformatted, r#"{"key":"value"}"#);
+    }
+
+    #[test]
+    fn test_minify() {
+        let json = r#"{
+            "name": "John",
+            "age": 30
+        }"#;
+        let minified = minify(json).unwrap();
+        assert_eq!(minified, r#"{"name":"John","age":30}"#);
+    }
+
+    #[test]
+    fn test_minify_preserves_string_whitespace() {
+        let json = r#"{"name": "John Doe"}"#;
+        let minified = minify(json).unwrap();
+        assert_eq!(minified, r#"{"name":"John Doe"}"#);
+    }
+
+    #[test]
+    fn test_minify_invalid() {
+        let json = r#"{"unclosed": "string}"#;
+        let result = minify(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_round_trip() {
+        let original = r#"{"name": "John", "age": 30, "active": true}"#;
+        let parsed = crate::parser::parse(original).unwrap();
+        let serialized = print_unformatted(&parsed);
+        let reparsed = crate::parser::parse(&serialized).unwrap();
+        assert_eq!(parsed, reparsed);
+    }
 }

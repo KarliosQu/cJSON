@@ -113,14 +113,16 @@ impl<'a> Parser<'a> {
             self.position += 4;
             Ok(JsonNode::Null)
         } else {
-            Err(JsonError::InvalidValue {
+            let c = self.peek().unwrap_or('\0');
+            Err(JsonError::UnexpectedCharacter {
+                character: c,
                 position: self.position,
-                reason: "Expected 'null'".to_string(),
+                expected: "null".to_string(),
             })
         }
     }
 
-    /// Parse a boolean value
+    /// Parse a boolean value (true or false)
     fn parse_bool(&mut self) -> Result<JsonNode> {
         self.skip_whitespace();
         
@@ -132,9 +134,11 @@ impl<'a> Parser<'a> {
             self.position += 5;
             Ok(JsonNode::Bool(false))
         } else {
-            Err(JsonError::InvalidValue {
+            let c = self.peek().unwrap_or('\0');
+            Err(JsonError::UnexpectedCharacter {
+                character: c,
                 position: self.position,
-                reason: "Expected 'true' or 'false'".to_string(),
+                expected: "true or false".to_string(),
             })
         }
     }
@@ -143,50 +147,59 @@ impl<'a> Parser<'a> {
     fn parse_number(&mut self) -> Result<JsonNode> {
         self.skip_whitespace();
         let start = self.position;
-        
+
         // Optional minus sign
         if let Some('-') = self.peek() {
             self.consume();
         }
-        
-        // Integer part
-        let mut has_digits = false;
-        while let Some(c) = self.peek() {
+
+        // Integer part (at least one digit)
+        if let Some('0') = self.peek() {
+            self.consume();
+        } else if let Some(c) = self.peek() {
             if c.is_ascii_digit() {
                 self.consume();
-                has_digits = true;
+                while let Some(c) = self.peek() {
+                    if c.is_ascii_digit() {
+                        self.consume();
+                    } else {
+                        break;
+                    }
+                }
             } else {
-                break;
+                return Err(JsonError::UnexpectedCharacter {
+                    character: c,
+                    position: self.position,
+                    expected: "digit".to_string(),
+                });
             }
-        }
-        
-        if !has_digits {
-            return Err(JsonError::InvalidNumber {
-                position: start,
-                reason: "Expected digits".to_string(),
+        } else {
+            return Err(JsonError::UnexpectedEndOfInput {
+                position: self.position,
+                expected: "digit".to_string(),
             });
         }
-        
+
         // Fractional part
         if let Some('.') = self.peek() {
             self.consume();
-            has_digits = false;
+            let mut has_digit = false;
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
                     self.consume();
-                    has_digits = true;
+                    has_digit = true;
                 } else {
                     break;
                 }
             }
-            if !has_digits {
+            if !has_digit {
                 return Err(JsonError::InvalidNumber {
                     position: self.position - 1,
                     reason: "Expected digits after decimal point".to_string(),
                 });
             }
         }
-        
+
         // Exponent part
         if let Some(c) = self.peek() {
             if c == 'e' || c == 'E' {
@@ -197,288 +210,505 @@ impl<'a> Parser<'a> {
                         self.consume();
                     }
                 }
-                has_digits = false;
+                // At least one digit
+                let mut has_digit = false;
                 while let Some(c) = self.peek() {
                     if c.is_ascii_digit() {
                         self.consume();
-                        has_digits = true;
+                        has_digit = true;
                     } else {
                         break;
                     }
                 }
-                if !has_digits {
+                if !has_digit {
                     return Err(JsonError::InvalidNumber {
-                        position: self.position - 1,
+                        position: self.position,
                         reason: "Expected digits in exponent".to_string(),
                     });
                 }
             }
         }
-        
+
         let num_str = &self.input[start..self.position];
-        num_str.parse::<f64>().map(JsonNode::Number).map_err(|_| JsonError::InvalidNumber {
-            position: start,
-            reason: "Failed to parse number".to_string(),
-        })
+        match num_str.parse::<f64>() {
+            Ok(n) => Ok(JsonNode::Number(n)),
+            Err(_) => Err(JsonError::InvalidNumber {
+                position: start,
+                reason: format!("Failed to parse number: {}", num_str),
+            }),
+        }
     }
 
     /// Parse a string
     fn parse_string(&mut self) -> Result<JsonNode> {
         self.skip_whitespace();
         self.expect_char('"')?;
-        
-        let start = self.position;
+
         let mut result = String::new();
-        
+        let _start = self.position;
+
         while let Some(c) = self.peek() {
-            if c == '"' {
-                self.consume();
-                return Ok(JsonNode::String(result));
-            } else if c == '\\' {
-                self.consume();
-                match self.peek() {
-                    Some('"') => { self.consume(); result.push('"'); }
-                    Some('\\') => { self.consume(); result.push('\\'); }
-                    Some('/') => { self.consume(); result.push('/'); }
-                    Some('b') => { self.consume(); result.push('\x08'); }
-                    Some('f') => { self.consume(); result.push('\x0c'); }
-                    Some('n') => { self.consume(); result.push('\n'); }
-                    Some('r') => { self.consume(); result.push('\r'); }
-                    Some('t') => { self.consume(); result.push('\t'); }
-                    Some('u') => {
-                        self.consume();
-                        let mut unicode = 0;
-                        for _ in 0..4 {
-                            let hex = self.peek().ok_or_else(|| JsonError::InvalidEscape {
-                                position: self.position,
-                                reason: "Incomplete Unicode escape".to_string(),
-                            })?;
-                            let digit = hex.to_digit(16).ok_or_else(|| JsonError::InvalidEscape {
-                                position: self.position,
-                                reason: format!("Invalid hex digit: {}", hex),
-                            })?;
-                            unicode = (unicode << 4) | digit;
-                            self.consume();
-                        }
-                        if let Some(c) = char::from_u32(unicode) {
-                            result.push(c);
-                        }
-                    }
-                    Some(other) => {
-                        return Err(JsonError::InvalidEscape {
-                            position: self.position,
-                            reason: format!("Invalid escape sequence: \\{}", other),
-                        });
-                    }
-                    None => {
-                        return Err(JsonError::UnexpectedEndOfInput {
-                            position: self.position,
-                            expected: "escape sequence character".to_string(),
-                        });
-                    }
+            match c {
+                '"' => {
+                    self.consume();
+                    return Ok(JsonNode::String(result));
                 }
-            } else if c.is_control() {
-                return Err(JsonError::InvalidCharacter {
-                    position: self.position,
-                    character: c,
-                    reason: "Control character in string".to_string(),
-                });
-            } else {
-                self.consume();
-                result.push(c);
+                '\\' => {
+                    self.consume();
+                    result.push(self.parse_escape_sequence()?);
+                }
+                '\0'..='\u{001f}' => {
+                    return Err(JsonError::InvalidString {
+                        position: self.position,
+                        reason: "Control character in string must be escaped".to_string(),
+                    });
+                }
+                _ => {
+                    self.consume();
+                    result.push(c);
+                }
             }
         }
-        
+
         Err(JsonError::UnexpectedEndOfInput {
             position: self.position,
-            expected: "closing quote".to_string(),
+            expected: "\"".to_string(),
+        })
+    }
+
+    /// Parse an escape sequence
+    fn parse_escape_sequence(&mut self) -> Result<char> {
+        let c = self.peek().ok_or(JsonError::UnexpectedEndOfInput {
+            position: self.position,
+            expected: "escape character".to_string(),
+        })?;
+
+        let escaped = match c {
+            '"' => '"',
+            '\\' => '\\',
+            '/' => '/',
+            'b' => '\x08',
+            'f' => '\x0c',
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            'u' => {
+                self.consume();
+                return self.parse_unicode_escape();
+            }
+            _ => {
+                return Err(JsonError::InvalidEscapeSequence {
+                    position: self.position,
+                    sequence: c.to_string(),
+                });
+            }
+        };
+
+        self.consume();
+        Ok(escaped)
+    }
+
+    /// Parse a Unicode escape sequence (\uXXXX)
+    fn parse_unicode_escape(&mut self) -> Result<char> {
+        let start = self.position;
+        let mut code_point = 0u32;
+
+        for _ in 0..4 {
+            let c = self.peek().ok_or(JsonError::UnexpectedEndOfInput {
+                position: self.position,
+                expected: "hex digit".to_string(),
+            })?;
+
+            let digit = c.to_digit(16).ok_or(JsonError::InvalidEscapeSequence {
+                position: self.position,
+                sequence: format!("\\u{}", &self.input[start..self.position + 1]),
+            })?;
+
+            code_point = (code_point << 4) | digit;
+            self.consume();
+        }
+
+        char::from_u32(code_point).ok_or(JsonError::InvalidEscapeSequence {
+            position: start,
+            sequence: format!("\\u{:04x}", code_point),
         })
     }
 
     /// Parse an array
     fn parse_array(&mut self) -> Result<JsonNode> {
-        self.expect_char('[')?;
+        self.check_nesting_limit()?;
         self.current_depth += 1;
-        if self.current_depth > self.options.nesting_limit {
-            return Err(JsonError::NestingLimitExceeded {
-                limit: self.options.nesting_limit,
-            });
-        }
-        
+
+        self.expect_char('[')?;
+
         let mut items = Vec::new();
-        
+        let mut has_value = false;
+
         loop {
             self.skip_whitespace();
+
             if let Some(']') = self.peek() {
                 self.consume();
-                self.current_depth -= 1;
-                return Ok(JsonNode::Array(items));
+                break;
             }
-            
-            let item = self.parse_value()?;
-            items.push(item);
-            
-            self.skip_whitespace();
-            if let Some(',') = self.peek() {
-                self.consume();
-                // Check for trailing comma
+
+            if has_value {
+                self.expect_char(',')?;
                 self.skip_whitespace();
+                
+                // Check for trailing comma
                 if let Some(']') = self.peek() {
-                    return Err(JsonError::UnexpectedCharacter {
-                        character: ']',
+                    return Err(JsonError::TrailingComma {
                         position: self.position,
-                        expected: "value after comma".to_string(),
                     });
                 }
-            } else if let Some(']') = self.peek() {
-                continue;
-            } else {
-                return Err(JsonError::UnexpectedCharacter {
-                    character: self.peek().unwrap_or('\0'),
-                    position: self.position,
-                    expected: "',' or ']'".to_string(),
-                });
             }
+
+            let value = self.parse_value()?;
+            items.push(value);
+            has_value = true;
         }
+
+        self.current_depth -= 1;
+        Ok(JsonNode::Array(items))
     }
 
     /// Parse an object
     fn parse_object(&mut self) -> Result<JsonNode> {
-        self.expect_char('{')?;
+        self.check_nesting_limit()?;
         self.current_depth += 1;
-        if self.current_depth > self.options.nesting_limit {
-            return Err(JsonError::NestingLimitExceeded {
-                limit: self.options.nesting_limit,
-            });
-        }
-        
-        let mut pairs = Vec::new();
-        
+
+        self.expect_char('{')?;
+
+        let mut members = Vec::new();
+        let mut has_value = false;
+
         loop {
             self.skip_whitespace();
+
             if let Some('}') = self.peek() {
                 self.consume();
-                self.current_depth -= 1;
-                return Ok(JsonNode::Object(pairs));
+                break;
             }
-            
+
+            if has_value {
+                self.expect_char(',')?;
+                self.skip_whitespace();
+                
+                // Check for trailing comma
+                if let Some('}') = self.peek() {
+                    return Err(JsonError::TrailingComma {
+                        position: self.position,
+                    });
+                }
+            }
+
             // Parse key (must be a string)
             let key = match self.parse_value()? {
                 JsonNode::String(s) => s,
                 _ => {
-                    return Err(JsonError::ExpectedString {
+                    return Err(JsonError::UnexpectedCharacter {
+                        character: self.peek().unwrap_or('\0'),
                         position: self.position,
+                        expected: "string key".to_string(),
                     });
                 }
             };
-            
-            // Check for duplicate key
-            if pairs.iter().any(|(k, _)| k == &key) {
+
+            self.skip_whitespace();
+            self.expect_char(':')?;
+
+            let value = self.parse_value()?;
+
+            // Check for duplicate keys
+            if members.iter().any(|(k, _)| k == &key) {
                 return Err(JsonError::DuplicateKey {
                     key: key.clone(),
-                });
-            }
-            
-            // Expect colon
-            self.expect_char(':')?;
-            
-            // Parse value
-            let value = self.parse_value()?;
-            pairs.push((key, value));
-            
-            self.skip_whitespace();
-            if let Some(',') = self.peek() {
-                self.consume();
-                // Check for trailing comma
-                self.skip_whitespace();
-                if let Some('}') = self.peek() {
-                    return Err(JsonError::UnexpectedCharacter {
-                        character: '}',
-                        position: self.position,
-                        expected: "key after comma".to_string(),
-                    });
-                }
-            } else if let Some('}') = self.peek() {
-                continue;
-            } else {
-                return Err(JsonError::UnexpectedCharacter {
-                    character: self.peek().unwrap_or('\0'),
                     position: self.position,
-                    expected: "',' or '}'".to_string(),
                 });
             }
+
+            members.push((key, value));
+            has_value = true;
         }
+
+        self.current_depth -= 1;
+        Ok(JsonNode::Object(members))
     }
 
-    /// Parse any JSON value
+    /// Check nesting limit
+    fn check_nesting_limit(&self) -> Result<()> {
+        if self.current_depth >= self.options.nesting_limit {
+            return Err(JsonError::NestingLimitExceeded {
+                position: self.position,
+                limit: self.options.nesting_limit,
+            });
+        }
+        Ok(())
+    }
+
+    /// Parse a JSON value
     fn parse_value(&mut self) -> Result<JsonNode> {
         self.skip_whitespace();
-        
-        match self.peek() {
-            Some('n') => self.parse_null(),
-            Some('t') | Some('f') => self.parse_bool(),
-            Some('"') => self.parse_string(),
-            Some('[') => self.parse_array(),
-            Some('{') => self.parse_object(),
-            Some('-') | Some(c) if c.is_ascii_digit() => self.parse_number(),
-            Some(c) => Err(JsonError::UnexpectedCharacter {
+
+        let c = self.peek().ok_or(JsonError::UnexpectedEndOfInput {
+            position: self.position,
+            expected: "value".to_string(),
+        })?;
+
+        match c {
+            'n' => self.parse_null(),
+            't' | 'f' => self.parse_bool(),
+            '-' | '0'..='9' => self.parse_number(),
+            '"' => self.parse_string(),
+            '[' => self.parse_array(),
+            '{' => self.parse_object(),
+            _ => Err(JsonError::UnexpectedCharacter {
                 character: c,
                 position: self.position,
-                expected: "JSON value".to_string(),
-            }),
-            None => Err(JsonError::UnexpectedEndOfInput {
-                position: self.position,
-                expected: "JSON value".to_string(),
+                expected: "value".to_string(),
             }),
         }
     }
 
-    /// Parse the entire document
+    /// Parse the complete JSON document
     fn parse_document(&mut self) -> Result<JsonNode> {
-        let result = self.parse_value()?;
-        
         self.skip_whitespace();
-        
-        // Check for null terminator if required
-        if self.options.require_null_terminated && !self.is_eof() {
-            return Err(JsonError::UnexpectedCharacter {
-                character: self.peek().unwrap_or('\0'),
+
+        if self.is_eof() {
+            return Err(JsonError::UnexpectedEndOfInput {
                 position: self.position,
-                expected: "null terminator".to_string(),
+                expected: "value".to_string(),
             });
         }
-        
-        // Ensure we consumed all input
+
+        let value = self.parse_value()?;
+
+        // Skip trailing whitespace
+        self.skip_whitespace();
+
+        // Check if we've consumed the entire input
         if !self.is_eof() {
-            return Err(JsonError::UnexpectedCharacter {
-                character: self.peek().unwrap_or('\0'),
-                position: self.position,
-                expected: "end of input".to_string(),
-            });
+            if self.options.require_null_terminated {
+                return Err(JsonError::ExpectedNullTerminator {
+                    position: self.position,
+                });
+            }
+            // When require_null_terminated is false, we allow trailing characters
+            // Just return the parsed value without checking for extra content
         }
-        
-        Ok(result)
+
+        Ok(value)
     }
 }
 
-/// Parse a JSON string
+/// Parse a JSON string into a JsonNode
 pub fn parse(json: &str) -> Result<JsonNode> {
     parse_with_opts(json, ParseOptions::new())
 }
 
 /// Parse a JSON string with a maximum length
-pub fn parse_with_length(json: &str, max_length: usize) -> Result<JsonNode> {
-    if json.len() > max_length {
-        return Err(JsonError::UnexpectedEndOfInput {
-            position: max_length,
-            expected: "more input".to_string(),
-        });
-    }
-    parse(json)
+pub fn parse_with_length(json: &str, length: usize) -> Result<JsonNode> {
+    let truncated = if json.len() > length {
+        &json[..length]
+    } else {
+        json
+    };
+    parse(truncated)
 }
 
 /// Parse a JSON string with custom options
 pub fn parse_with_opts(json: &str, opts: ParseOptions) -> Result<JsonNode> {
     let mut parser = Parser::new(json, opts);
     parser.parse_document()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_null() {
+        let result = parse("null");
+        assert_eq!(result, Ok(JsonNode::Null));
+    }
+
+    #[test]
+    fn test_parse_bool() {
+        assert_eq!(parse("true"), Ok(JsonNode::Bool(true)));
+        assert_eq!(parse("false"), Ok(JsonNode::Bool(false)));
+    }
+
+    #[test]
+    fn test_parse_number() {
+        assert_eq!(parse("42"), Ok(JsonNode::Number(42.0)));
+        assert_eq!(parse("-42"), Ok(JsonNode::Number(-42.0)));
+        assert_eq!(parse("3.14"), Ok(JsonNode::Number(3.14)));
+        assert_eq!(parse("-3.14"), Ok(JsonNode::Number(-3.14)));
+        assert_eq!(parse("1e5"), Ok(JsonNode::Number(100000.0)));
+        assert_eq!(parse("1.5e-3"), Ok(JsonNode::Number(0.0015)));
+    }
+
+    #[test]
+    fn test_parse_string() {
+        assert_eq!(parse(r#""hello""#), Ok(JsonNode::String("hello".to_string())));
+        assert_eq!(parse(r#""world""#), Ok(JsonNode::String("world".to_string())));
+    }
+
+    #[test]
+    fn test_parse_string_with_escapes() {
+        assert_eq!(parse(r#""hello\nworld""#), Ok(JsonNode::String("hello\nworld".to_string())));
+        assert_eq!(parse(r#""\"quoted\"""#), Ok(JsonNode::String("\"quoted\"".to_string())));
+        assert_eq!(parse(r#""\\t\\\\""#), Ok(JsonNode::String("\t\\".to_string())));
+    }
+
+    #[test]
+    fn test_parse_array() {
+        let result = parse("[]");
+        assert_eq!(result, Ok(JsonNode::Array(vec![])));
+
+        let result = parse("[1, 2, 3]");
+        assert_eq!(
+            result,
+            Ok(JsonNode::Array(vec![
+                JsonNode::Number(1.0),
+                JsonNode::Number(2.0),
+                JsonNode::Number(3.0),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_parse_nested_array() {
+        let result = parse("[[1], [2], [3]]");
+        assert_eq!(
+            result,
+            Ok(JsonNode::Array(vec![
+                JsonNode::Array(vec![JsonNode::Number(1.0)]),
+                JsonNode::Array(vec![JsonNode::Number(2.0)]),
+                JsonNode::Array(vec![JsonNode::Number(3.0)]),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_parse_object() {
+        let result = parse("{}");
+        assert_eq!(result, Ok(JsonNode::Object(vec![])));
+
+        let result = parse(r#"{"key": "value"}"#);
+        assert_eq!(
+            result,
+            Ok(JsonNode::Object(vec![(
+                "key".to_string(),
+                JsonNode::String("value".to_string()),
+            )]))
+        );
+    }
+
+    #[test]
+    fn test_parse_nested_object() {
+        let result = parse(r#"{"outer": {"inner": "value"}}"#);
+        assert_eq!(
+            result,
+            Ok(JsonNode::Object(vec![(
+                "outer".to_string(),
+                JsonNode::Object(vec![(
+                    "inner".to_string(),
+                    JsonNode::String("value".to_string()),
+                )]),
+            )]))
+        );
+    }
+
+    #[test]
+    fn test_parse_complex_json() {
+        let json = r#"{
+            "name": "John",
+            "age": 30,
+            "isStudent": false,
+            "hobbies": ["reading", "gaming"],
+            "address": {
+                "city": "New York",
+                "country": "USA"
+            }
+        }"#;
+
+        let result = parse(json);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_with_length() {
+        let result = parse_with_length(r#"{"key": "value"}"#, 10);
+        assert!(result.is_err()); // Truncated JSON should fail
+    }
+
+    #[test]
+    fn test_parse_with_options() {
+        // 要求 null 终止符
+        let opts = ParseOptions::new().with_null_terminated(true);
+        let result = parse_with_opts("null extra", opts);
+        assert!(result.is_err());
+
+        // 不要求 null 终止符
+        let opts = ParseOptions::new().with_null_terminated(false);
+        let result = parse_with_opts("null extra", opts);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_invalid_json() {
+        assert!(parse("{").is_err());
+        assert!(parse("[").is_err());
+        assert!(parse(r#""unclosed string"#).is_err());
+        assert!(parse("123abc").is_err());
+    }
+
+    #[test]
+    fn test_trailing_comma() {
+        assert!(parse("[1, 2,]").is_err());
+        assert!(parse(r#"{"a": 1,}"#).is_err());
+    }
+
+    #[test]
+    fn test_nesting_limit() {
+        let opts = ParseOptions::new().with_nesting_limit(2);
+        let deep_json = "[[[1]]]"; // Nesting depth 3
+        let result = parse_with_opts(deep_json, opts);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_whitespace_handling() {
+        assert_eq!(parse("  null  "), Ok(JsonNode::Null));
+        assert_eq!(parse("\ntrue\n"), Ok(JsonNode::Bool(true)));
+        assert_eq!(parse("\t42\t"), Ok(JsonNode::Number(42.0)));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        assert!(parse("").is_err());
+        assert!(parse("   ").is_err());
+    }
+
+    #[test]
+    fn test_unicode_escape() {
+        let result = parse(r#""\u0041""#);
+        assert_eq!(result, Ok(JsonNode::String("A".to_string())));
+    }
+
+    #[test]
+    fn test_duplicate_key() {
+        let result = parse(r#"{"key": 1, "key": 2}"#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_json() {
+        assert!(parse("{").is_err()); // 未闭合的对象
+        assert!(parse("[").is_err()); // 未闭合的数组
+        assert!(parse(r#""unclosed string"#).is_err()); // 未闭合的字符串
+        assert!(parse("123abc").is_err()); // 无效的数字后缀
+    }
 }

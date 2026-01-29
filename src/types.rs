@@ -46,6 +46,26 @@ impl JsonNode {
         matches!(self, JsonNode::Object(_))
     }
 
+    /// Check if the value is true
+    pub fn is_true(&self) -> bool {
+        matches!(self, JsonNode::Bool(true))
+    }
+
+    /// Check if the value is false
+    pub fn is_false(&self) -> bool {
+        matches!(self, JsonNode::Bool(false))
+    }
+
+    /// Check if the value is invalid (always returns false in Rust)
+    pub fn is_invalid(&self) -> bool {
+        false
+    }
+
+    /// Check if the value is raw JSON
+    pub fn is_raw(&self) -> bool {
+        matches!(self, JsonNode::Raw(_))
+    }
+
     /// Get the value as a string reference, if it is a string
     pub fn as_string(&self) -> Option<&str> {
         match self {
@@ -184,7 +204,7 @@ impl JsonNode {
     }
 
     /// Get the type name of the JsonNode as a string
-    fn type_name(&self) -> &'static str {
+    pub fn type_name(&self) -> &'static str {
         match self {
             JsonNode::Null => "Null",
             JsonNode::Bool(_) => "Bool",
@@ -259,42 +279,6 @@ impl JsonNode {
         self.add_item_to_object(key, JsonNode::Bool(value))
     }
 
-    /// Add a null value to the object with the given key
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
-    pub fn add_null_to_object(&mut self, key: impl Into<String>) -> Result<()> {
-        self.add_item_to_object(key, JsonNode::Null)
-    }
-
-    /// Add a true value to the object with the given key
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
-    pub fn add_true_to_object(&mut self, key: impl Into<String>) -> Result<()> {
-        self.add_item_to_object(key, JsonNode::Bool(true))
-    }
-
-    /// Add a false value to the object with the given key
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
-    pub fn add_false_to_object(&mut self, key: impl Into<String>) -> Result<()> {
-        self.add_item_to_object(key, JsonNode::Bool(false))
-    }
-
-    /// Add raw JSON string to the object with the given key
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
-    pub fn add_raw_to_object(&mut self, key: impl Into<String>, raw: &str) -> Result<()> {
-        self.add_item_to_object(key, JsonNode::Raw(raw.to_string()))
-    }
-
     /// Create an array from a slice of i64 values
     pub fn create_int_array(values: &[i64]) -> Self {
         JsonNode::Array(values.iter().map(|&v| JsonNode::Number(v as f64)).collect())
@@ -315,7 +299,7 @@ impl JsonNode {
         JsonNode::Array(values.iter().map(|&v| JsonNode::String(v.to_string())).collect())
     }
 
-    /// Delete an item from an array at the specified index
+    /// Delete an item from the array at the specified index
     ///
     /// # Errors
     ///
@@ -325,16 +309,47 @@ impl JsonNode {
         match self {
             JsonNode::Array(arr) => {
                 if index >= arr.len() {
-                    return Err(JsonError::IndexOutOfBounds { index, length: arr.len() });
+                    return Err(JsonError::IndexOutOfBounds {
+                        index,
+                        length: arr.len(),
+                    });
                 }
                 arr.remove(index);
                 Ok(())
             }
-            _ => Err(JsonError::InvalidType { expected: "Array".to_string(), found: self.type_name().to_string() }),
+            _ => Err(JsonError::InvalidType {
+                expected: "Array".to_string(),
+                found: self.type_name().to_string(),
+            }),
         }
     }
 
-    /// Detach an item from an array at the specified index, removing it and returning ownership
+    /// Delete an item from the object with the given key
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    /// Returns `Err(JsonError::KeyNotFound)` if the key does not exist
+    pub fn delete_item_from_object(&mut self, key: &str) -> Result<()> {
+        match self {
+            JsonNode::Object(pairs) => {
+                if let Some(pos) = pairs.iter().position(|(k, _)| k == key) {
+                    pairs.remove(pos);
+                    Ok(())
+                } else {
+                    Err(JsonError::KeyNotFound {
+                        key: key.to_string(),
+                    })
+                }
+            }
+            _ => Err(JsonError::InvalidType {
+                expected: "Object".to_string(),
+                found: self.type_name().to_string(),
+            }),
+        }
+    }
+
+    /// Detach an item from the array at the specified index and return it
     ///
     /// # Errors
     ///
@@ -344,34 +359,21 @@ impl JsonNode {
         match self {
             JsonNode::Array(arr) => {
                 if index >= arr.len() {
-                    return Err(JsonError::IndexOutOfBounds { index, length: arr.len() });
+                    return Err(JsonError::IndexOutOfBounds {
+                        index,
+                        length: arr.len(),
+                    });
                 }
                 Ok(arr.remove(index))
             }
-            _ => Err(JsonError::InvalidType { expected: "Array".to_string(), found: self.type_name().to_string() }),
+            _ => Err(JsonError::InvalidType {
+                expected: "Array".to_string(),
+                found: self.type_name().to_string(),
+            }),
         }
     }
 
-    /// Delete an item from an object with the specified key
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
-    /// Returns `Err(JsonError::KeyNotFound)` if the key does not exist
-    pub fn delete_item_from_object(&mut self, key: &str) -> Result<()> {
-        match self {
-            JsonNode::Object(pairs) => {
-                let pos = pairs.iter().position(|(k, _)| k == key);
-                match pos {
-                    Some(idx) => { pairs.remove(idx); Ok(()) }
-                    None => Err(JsonError::KeyNotFound { key: key.to_string() }),
-                }
-            }
-            _ => Err(JsonError::InvalidType { expected: "Object".to_string(), found: self.type_name().to_string() }),
-        }
-    }
-
-    /// Detach an item from an object with the specified key, removing it and returning ownership
+    /// Detach an item from the object with the given key and return it
     ///
     /// # Errors
     ///
@@ -380,76 +382,119 @@ impl JsonNode {
     pub fn detach_item_from_object(&mut self, key: &str) -> Result<JsonNode> {
         match self {
             JsonNode::Object(pairs) => {
-                let pos = pairs.iter().position(|(k, _)| k == key);
-                match pos {
-                    Some(idx) => {
-                        let (_, value) = pairs.remove(idx);
-                        Ok(value)
-                    }
-                    None => Err(JsonError::KeyNotFound { key: key.to_string() }),
+                if let Some(pos) = pairs.iter().position(|(k, _)| k == key) {
+                    Ok(pairs.remove(pos).1)
+                } else {
+                    Err(JsonError::KeyNotFound {
+                        key: key.to_string(),
+                    })
                 }
             }
-            _ => Err(JsonError::InvalidType { expected: "Object".to_string(), found: self.type_name().to_string() }),
+            _ => Err(JsonError::InvalidType {
+                expected: "Object".to_string(),
+                found: self.type_name().to_string(),
+            }),
         }
     }
 
-    /// Replace an item in an array at the specified index
+    /// Replace an item in the array at the specified index
     ///
     /// # Errors
     ///
     /// Returns `Err(JsonError::InvalidType)` if the node is not an array
     /// Returns `Err(JsonError::IndexOutOfBounds)` if the index is out of bounds
-    pub fn replace_item_in_array(&mut self, index: usize, newitem: JsonNode) -> Result<()> {
+    pub fn replace_item_in_array(&mut self, index: usize, new_item: JsonNode) -> Result<()> {
         match self {
             JsonNode::Array(arr) => {
                 if index >= arr.len() {
-                    return Err(JsonError::IndexOutOfBounds { index, length: arr.len() });
+                    return Err(JsonError::IndexOutOfBounds {
+                        index,
+                        length: arr.len(),
+                    });
                 }
-                arr[index] = newitem;
+                arr[index] = new_item;
                 Ok(())
             }
-            _ => Err(JsonError::InvalidType { expected: "Array".to_string(), found: self.type_name().to_string() }),
+            _ => Err(JsonError::InvalidType {
+                expected: "Array".to_string(),
+                found: self.type_name().to_string(),
+            }),
         }
     }
 
-    /// Replace an item in an object with the specified key
+    /// Replace an item in the object with the given key
     ///
     /// # Errors
     ///
     /// Returns `Err(JsonError::InvalidType)` if the node is not an object
     /// Returns `Err(JsonError::KeyNotFound)` if the key does not exist
-    pub fn replace_item_in_object(&mut self, key: &str, newitem: JsonNode) -> Result<()> {
+    pub fn replace_item_in_object(&mut self, key: &str, new_item: JsonNode) -> Result<()> {
         match self {
             JsonNode::Object(pairs) => {
-                let pos = pairs.iter().position(|(k, _)| k == key);
-                match pos {
-                    Some(idx) => {
-                        pairs[idx] = (key.to_string(), newitem);
-                        Ok(())
-                    }
-                    None => Err(JsonError::KeyNotFound { key: key.to_string() }),
+                if let Some(pos) = pairs.iter().position(|(k, _)| k == key) {
+                    pairs[pos] = (key.to_string(), new_item);
+                    Ok(())
+                } else {
+                    Err(JsonError::KeyNotFound {
+                        key: key.to_string(),
+                    })
                 }
             }
-            _ => Err(JsonError::InvalidType { expected: "Object".to_string(), found: self.type_name().to_string() }),
+            _ => Err(JsonError::InvalidType {
+                expected: "Object".to_string(),
+                found: self.type_name().to_string(),
+            }),
         }
     }
 
-    /// Insert an item into an array at the specified index
+    /// Insert an item into the array at the specified position
     ///
     /// # Errors
     ///
     /// Returns `Err(JsonError::InvalidType)` if the node is not an array
-    /// Returns `Err(JsonError::IndexOutOfBounds)` if the index is greater than the length
-    pub fn insert_item_in_array(&mut self, index: usize, newitem: JsonNode) -> Result<()> {
+    /// Returns `Err(JsonError::IndexOutOfBounds)` if the index is out of bounds
+    pub fn insert_item_in_array(&mut self, index: usize, item: JsonNode) -> Result<()> {
         match self {
             JsonNode::Array(arr) => {
                 if index > arr.len() {
-                    return Err(JsonError::IndexOutOfBounds { index, length: arr.len() });
+                    return Err(JsonError::IndexOutOfBounds {
+                        index,
+                        length: arr.len(),
+                    });
                 }
-                arr.insert(index, newitem);
+                arr.insert(index, item);
                 Ok(())
             }
-            _ => Err(JsonError::InvalidType { expected: "Array".to_string(), found: self.type_name().to_string() }),
+            _ => Err(JsonError::InvalidType {
+                expected: "Array".to_string(),
+                found: self.type_name().to_string(),
+            }),
+        }
+    }
+
+    /// Sort the keys of an object
+    ///
+    /// # Arguments
+    ///
+    /// * `case_sensitive` - If true, sort with case sensitivity; otherwise, sort case-insensitively
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    pub fn sort_object(&mut self, case_sensitive: bool) -> Result<()> {
+        match self {
+            JsonNode::Object(pairs) => {
+                if case_sensitive {
+                    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+                } else {
+                    pairs.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                }
+                Ok(())
+            }
+            _ => Err(JsonError::InvalidType {
+                expected: "Object".to_string(),
+                found: self.type_name().to_string(),
+            }),
         }
     }
 }
@@ -493,3 +538,181 @@ impl fmt::Display for JsonNode {
 }
 
 impl Eq for JsonNode {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_type_checks() {
+        let null = JsonNode::Null;
+        let bool_val = JsonNode::Bool(true);
+        let num = JsonNode::Number(42.0);
+        let str_val = JsonNode::String("hello".to_string());
+        let arr = JsonNode::Array(vec![]);
+        let obj = JsonNode::Object(vec![]);
+
+        assert!(null.is_null());
+        assert!(bool_val.is_bool());
+        assert!(num.is_number());
+        assert!(str_val.is_string());
+        assert!(arr.is_array());
+        assert!(obj.is_object());
+    }
+
+    #[test]
+    fn test_value_accessors() {
+        let str_val = JsonNode::String("hello".to_string());
+        assert_eq!(str_val.as_string(), Some("hello"));
+
+        let num = JsonNode::Number(42.0);
+        assert_eq!(num.as_number(), Some(42.0));
+
+        let bool_val = JsonNode::Bool(true);
+        assert_eq!(bool_val.as_bool(), Some(true));
+
+        let arr = JsonNode::Array(vec![JsonNode::Number(1.0), JsonNode::Number(2.0)]);
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.0)));
+
+        let obj = JsonNode::Object(vec![("key".to_string(), JsonNode::Number(42.0))]);
+        assert_eq!(obj.len(), 1);
+        assert_eq!(obj.get("key"), Some(&JsonNode::Number(42.0)));
+    }
+
+    #[test]
+    fn test_constructors() {
+        assert_eq!(JsonNode::new_null(), JsonNode::Null);
+        assert_eq!(JsonNode::new_true(), JsonNode::Bool(true));
+        assert_eq!(JsonNode::new_false(), JsonNode::Bool(false));
+        assert_eq!(JsonNode::new_bool(true), JsonNode::Bool(true));
+        assert_eq!(JsonNode::new_number(42.0), JsonNode::Number(42.0));
+        assert_eq!(JsonNode::new_string("hello"), JsonNode::String("hello".to_string()));
+        assert_eq!(JsonNode::new_array(), JsonNode::Array(vec![]));
+        assert_eq!(JsonNode::new_object(), JsonNode::Object(vec![]));
+    }
+
+    #[test]
+    fn test_add_item_to_array() {
+        use crate::error::Result;
+        
+        let mut arr = JsonNode::new_array();
+        arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
+        arr.add_item_to_array(JsonNode::String("hello".to_string())).unwrap();
+        arr.add_item_to_array(JsonNode::Bool(true)).unwrap();
+        
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.0)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::String("hello".to_string())));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Bool(true)));
+    }
+
+    #[test]
+    fn test_add_item_to_array_invalid_type() {
+        use crate::error::JsonError;
+        
+        let mut node = JsonNode::new_object();
+        let result = node.add_item_to_array(JsonNode::Number(1.0));
+        
+        assert!(result.is_err());
+        match result {
+            Err(JsonError::InvalidType { expected, found }) => {
+                assert_eq!(expected, "Array");
+                assert_eq!(found, "Object");
+            }
+            _ => panic!("Expected InvalidType error"),
+        }
+    }
+
+    #[test]
+    fn test_add_item_to_object() {
+        use crate::error::Result;
+        
+        let mut obj = JsonNode::new_object();
+        obj.add_item_to_object("name", JsonNode::String("Alice".to_string())).unwrap();
+        obj.add_item_to_object("age", JsonNode::Number(30.0)).unwrap();
+        
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj.get("name"), Some(&JsonNode::String("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&JsonNode::Number(30.0)));
+    }
+
+    #[test]
+    fn test_add_item_to_object_invalid_type() {
+        use crate::error::JsonError;
+        
+        let mut node = JsonNode::new_array();
+        let result = node.add_item_to_object("key", JsonNode::String("value".to_string()));
+        
+        assert!(result.is_err());
+        match result {
+            Err(JsonError::InvalidType { expected, found }) => {
+                assert_eq!(expected, "Object");
+                assert_eq!(found, "Array");
+            }
+            _ => panic!("Expected InvalidType error"),
+        }
+    }
+
+    #[test]
+    fn test_convenience_add_methods() {
+        use crate::error::Result;
+        
+        let mut obj = JsonNode::new_object();
+        obj.add_string_to_object("name", "Alice").unwrap();
+        obj.add_number_to_object("age", 30.0).unwrap();
+        obj.add_bool_to_object("active", true).unwrap();
+        
+        assert_eq!(obj.len(), 3);
+        assert_eq!(obj.get("name"), Some(&JsonNode::String("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&JsonNode::Number(30.0)));
+        assert_eq!(obj.get("active"), Some(&JsonNode::Bool(true)));
+    }
+
+    #[test]
+    fn test_create_int_array() {
+        let values: &[i64] = &[1, 2, 3, 4, 5];
+        let arr = JsonNode::create_int_array(values);
+        
+        assert_eq!(arr.len(), 5);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.0)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.0)));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.0)));
+        assert_eq!(arr.get_at(3), Some(&JsonNode::Number(4.0)));
+        assert_eq!(arr.get_at(4), Some(&JsonNode::Number(5.0)));
+    }
+
+    #[test]
+    fn test_create_float_array() {
+        let values: &[f32] = &[1.1, 2.2, 3.3];
+        let arr = JsonNode::create_float_array(values);
+        
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.1)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.2)));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.3)));
+    }
+
+    #[test]
+    fn test_create_double_array() {
+        let values: &[f64] = &[1.5, 2.5, 3.5, 4.5];
+        let arr = JsonNode::create_double_array(values);
+        
+        assert_eq!(arr.len(), 4);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.5)));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.5)));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.5)));
+        assert_eq!(arr.get_at(3), Some(&JsonNode::Number(4.5)));
+    }
+
+    #[test]
+    fn test_create_string_array() {
+        let values: &[&str] = &["hello", "world", "rust"];
+        let arr = JsonNode::create_string_array(values);
+        
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr.get_at(0), Some(&JsonNode::String("hello".to_string())));
+        assert_eq!(arr.get_at(1), Some(&JsonNode::String("world".to_string())));
+        assert_eq!(arr.get_at(2), Some(&JsonNode::String("rust".to_string())));
+    }
+}
