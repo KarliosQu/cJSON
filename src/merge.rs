@@ -140,8 +140,8 @@ mod tests {
 
     #[test]
     fn test_merge_patch_primitive_replacement() {
-        let mut target = JsonNode::String("old");
-        let patch = JsonNode::String("new");
+        let mut target = JsonNode::String("old".to_string());
+        let patch = JsonNode::String("new".to_string());
 
         assert!(merge_patch(&mut target, &patch, true).is_ok());
         assert_eq!(target, JsonNode::String("new".to_string()));

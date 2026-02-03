@@ -594,8 +594,6 @@ mod tests {
 
     #[test]
     fn test_add_item_to_array() {
-        use crate::error::Result;
-        
         let mut arr = JsonNode::new_array();
         arr.add_item_to_array(JsonNode::Number(1.0)).unwrap();
         arr.add_item_to_array(JsonNode::String("hello".to_string())).unwrap();
@@ -626,8 +624,6 @@ mod tests {
 
     #[test]
     fn test_add_item_to_object() {
-        use crate::error::Result;
-        
         let mut obj = JsonNode::new_object();
         obj.add_item_to_object("name", JsonNode::String("Alice".to_string())).unwrap();
         obj.add_item_to_object("age", JsonNode::Number(30.0)).unwrap();
@@ -656,8 +652,6 @@ mod tests {
 
     #[test]
     fn test_convenience_add_methods() {
-        use crate::error::Result;
-        
         let mut obj = JsonNode::new_object();
         obj.add_string_to_object("name", "Alice").unwrap();
         obj.add_number_to_object("age", 30.0).unwrap();
@@ -686,11 +680,21 @@ mod tests {
     fn test_create_float_array() {
         let values: &[f32] = &[1.1, 2.2, 3.3];
         let arr = JsonNode::create_float_array(values);
-        
+
         assert_eq!(arr.len(), 3);
-        assert_eq!(arr.get_at(0), Some(&JsonNode::Number(1.1)));
-        assert_eq!(arr.get_at(1), Some(&JsonNode::Number(2.2)));
-        assert_eq!(arr.get_at(2), Some(&JsonNode::Number(3.3)));
+        // Use approximate comparison for floating point values
+        match arr.get_at(0) {
+            Some(JsonNode::Number(n)) => assert!((n - 1.1_f64).abs() < 1e-6, "Expected ~1.1, got {}", n),
+            _ => panic!("Expected Number"),
+        }
+        match arr.get_at(1) {
+            Some(JsonNode::Number(n)) => assert!((n - 2.2_f64).abs() < 1e-6, "Expected ~2.2, got {}", n),
+            _ => panic!("Expected Number"),
+        }
+        match arr.get_at(2) {
+            Some(JsonNode::Number(n)) => assert!((n - 3.3_f64).abs() < 1e-6, "Expected ~3.3, got {}", n),
+            _ => panic!("Expected Number"),
+        }
     }
 
     #[test]
