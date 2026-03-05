@@ -1,5 +1,7 @@
 use crate::error::{JsonError, Result};
 use crate::types::JsonNode;
+use std::iter::Peekable;
+use std::str::Chars;
 
 /// Parser configuration options
 #[derive(Debug, Clone, Default)]
@@ -21,8 +23,9 @@ impl ParseOptions {
 }
 
 /// JSON parser
+#[derive(Debug)]
 pub struct Parser<'a> {
-    chars: std::iter::Peekable<std::str::Chars<'a>>,
+    chars: Peekable<Chars<'a>>,
     position: usize,
     options: ParseOptions,
     current_depth: usize,
@@ -48,7 +51,7 @@ impl<'a> Parser<'a> {
     fn consume(&mut self) -> Option<char> {
         let c = self.chars.next();
         if c.is_some() {
-            self.position += 1;
+            self.position = self.position.wrapping_add(1);
         }
         c
     }
@@ -114,7 +117,7 @@ impl<'a> Parser<'a> {
                 Some(c) => {
                     return Err(JsonError::UnexpectedCharacter {
                         character: c,
-                        position: self.position - 1,
+                        position: self.position.wrapping_sub(1),
                         expected: literal.to_string(),
                     })
                 }
@@ -172,7 +175,7 @@ impl<'a> Parser<'a> {
             Some('t') => Ok('\t'),
             Some('u') => self.parse_unicode_escape(),
             Some(c) => Err(JsonError::InvalidEscapeSequence {
-                position: self.position - 1,
+                position: self.position.wrapping_sub(1),
                 sequence: c.to_string(),
             }),
             None => Err(JsonError::InvalidEscapeSequence {
@@ -186,18 +189,18 @@ impl<'a> Parser<'a> {
     fn parse_unicode_escape(&mut self) -> Result<char> {
         let mut code_point = 0u32;
 
-        for _ in 0..4 {
+        for _ in 0_i32..4_i32 {
             let digit = self.consume().ok_or(JsonError::InvalidString {
                 position: self.position,
                 reason: "Unexpected end of input in unicode escape".to_string(),
             })?;
 
             let value = digit.to_digit(16).ok_or(JsonError::InvalidString {
-                position: self.position - 1,
+                position: self.position.wrapping_sub(1),
                 reason: format!("Invalid hex digit '{}'", digit),
             })?;
 
-            code_point = (code_point << 4) | value;
+            code_point = (code_point << 4_i32) | value;
         }
 
         char::from_u32(code_point).ok_or(JsonError::InvalidString {
@@ -213,17 +216,23 @@ impl<'a> Parser<'a> {
 
         // Parse optional minus sign
         if let Some(&'-') = self.chars.peek() {
-            num_str.push(self.consume().unwrap());
+            if let Some(c) = self.consume() {
+                num_str.push(c);
+            }
         }
 
         // Parse integer part
         if let Some(&'0') = self.chars.peek() {
-            num_str.push(self.consume().unwrap());
+            if let Some(c) = self.consume() {
+                num_str.push(c);
+            }
         } else if let Some(&c) = self.chars.peek() {
             if c.is_ascii_digit() {
                 while let Some(&c) = self.chars.peek() {
                     if c.is_ascii_digit() {
-                        num_str.push(self.consume().unwrap());
+                        if let Some(ch) = self.consume() {
+                            num_str.push(ch);
+                        }
                     } else {
                         break;
                     }
@@ -243,10 +252,14 @@ impl<'a> Parser<'a> {
 
         // Parse fractional part
         if let Some(&'.') = self.chars.peek() {
-            num_str.push(self.consume().unwrap());
+            if let Some(c) = self.consume() {
+                num_str.push(c);
+            }
             while let Some(&c) = self.chars.peek() {
                 if c.is_ascii_digit() {
-                    num_str.push(self.consume().unwrap());
+                    if let Some(ch) = self.consume() {
+                        num_str.push(ch);
+                    }
                 } else {
                     break;
                 }
@@ -255,13 +268,19 @@ impl<'a> Parser<'a> {
 
         // Parse exponent
         if let Some(&'e' | &'E') = self.chars.peek() {
-            num_str.push(self.consume().unwrap());
+            if let Some(c) = self.consume() {
+                num_str.push(c);
+            }
             if let Some(&'+' | &'-') = self.chars.peek() {
-                num_str.push(self.consume().unwrap());
+                if let Some(c) = self.consume() {
+                    num_str.push(c);
+                }
             }
             while let Some(&c) = self.chars.peek() {
                 if c.is_ascii_digit() {
-                    num_str.push(self.consume().unwrap());
+                    if let Some(ch) = self.consume() {
+                        num_str.push(ch);
+                    }
                 } else {
                     break;
                 }
@@ -285,7 +304,7 @@ impl<'a> Parser<'a> {
                 limit: self.options.nesting_limit,
             });
         }
-        self.current_depth += 1;
+        self.current_depth = self.current_depth.saturating_add(1);
 
         self.consume(); // Skip opening bracket
         self.skip_whitespace();
@@ -294,7 +313,7 @@ impl<'a> Parser<'a> {
 
         if let Some(&']') = self.chars.peek() {
             self.consume();
-            self.current_depth -= 1;
+            self.current_depth = self.current_depth.saturating_sub(1);
             return Ok(JsonNode::Array(array));
         }
 
@@ -315,24 +334,24 @@ impl<'a> Parser<'a> {
                 }
                 Some(']') => break,
                 Some(c) => {
-                    self.current_depth -= 1;
+                    self.current_depth = self.current_depth.saturating_sub(1);
                     return Err(JsonError::UnexpectedCharacter {
                         character: c,
-                        position: self.position - 1,
+                        position: self.position.saturating_sub(1),
                         expected: "',' or ']'".to_string(),
                     })
                 }
                 None => {
-                    self.current_depth -= 1;
+                    self.current_depth = self.current_depth.saturating_sub(1);
                     return Err(JsonError::UnexpectedEndOfInput {
                         position: self.position,
                         expected: "',' or ']'".to_string(),
-                    })
+                    });
                 }
             }
         }
 
-        self.current_depth -= 1;
+        self.current_depth = self.current_depth.saturating_sub(1);
         Ok(JsonNode::Array(array))
     }
 
@@ -344,7 +363,7 @@ impl<'a> Parser<'a> {
                 limit: self.options.nesting_limit,
             });
         }
-        self.current_depth += 1;
+        self.current_depth = self.current_depth.saturating_add(1);
 
         self.consume(); // Skip opening brace
         self.skip_whitespace();
@@ -354,7 +373,7 @@ impl<'a> Parser<'a> {
 
         if let Some(&'}') = self.chars.peek() {
             self.consume();
-            self.current_depth -= 1;
+            self.current_depth = self.current_depth.saturating_sub(1);
             return Ok(JsonNode::Object(object));
         }
 
@@ -368,7 +387,7 @@ impl<'a> Parser<'a> {
 
             // Check for duplicate key
             if keys.contains(&key) {
-                self.current_depth -= 1;
+                self.current_depth = self.current_depth.saturating_sub(1);
                 return Err(JsonError::DuplicateKey {
                     key: key.clone(),
                     position: self.position,
@@ -381,15 +400,15 @@ impl<'a> Parser<'a> {
             match self.consume() {
                 Some(':') => {}
                 Some(c) => {
-                    self.current_depth -= 1;
+                    self.current_depth = self.current_depth.saturating_sub(1);
                     return Err(JsonError::UnexpectedCharacter {
                         character: c,
-                        position: self.position - 1,
+                        position: self.position.saturating_sub(1),
                         expected: ":".to_string(),
                     })
                 }
                 None => {
-                    self.current_depth -= 1;
+                    self.current_depth = self.current_depth.saturating_sub(1);
                     return Err(JsonError::UnexpectedEndOfInput {
                         position: self.position,
                         expected: ":".to_string(),
@@ -414,15 +433,15 @@ impl<'a> Parser<'a> {
                 }
                 Some('}') => break,
                 Some(c) => {
-                    self.current_depth -= 1;
+                    self.current_depth = self.current_depth.saturating_sub(1);
                     return Err(JsonError::UnexpectedCharacter {
                         character: c,
-                        position: self.position - 1,
+                        position: self.position.saturating_sub(1),
                         expected: "',' or '}'".to_string(),
                     })
                 }
                 None => {
-                    self.current_depth -= 1;
+                    self.current_depth = self.current_depth.saturating_sub(1);
                     return Err(JsonError::UnexpectedEndOfInput {
                         position: self.position,
                         expected: "',' or '}'".to_string(),
@@ -431,7 +450,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.current_depth -= 1;
+        self.current_depth = self.current_depth.saturating_sub(1);
         Ok(JsonNode::Object(object))
     }
 
@@ -470,17 +489,30 @@ impl<'a> Parser<'a> {
 }
 
 /// Parse a JSON string into a JsonNode
+///
+/// # Errors
+///
+/// Returns `JsonError` if the JSON string is invalid or contains syntax errors.
 pub fn parse(json: &str) -> Result<JsonNode> {
     parse_with_opts(json, ParseOptions::new())
 }
 
 /// Parse a JSON string with options
+///
+/// # Errors
+///
+/// Returns `JsonError` if the JSON string is invalid, contains syntax errors,
+/// or exceeds the nesting limit specified in the options.
 pub fn parse_with_opts(json: &str, opts: ParseOptions) -> Result<JsonNode> {
     let mut parser = Parser::new(json, opts);
     parser.parse_document()
 }
 
 /// Parse a JSON string with length limit
+///
+/// # Errors
+///
+/// Returns `JsonError` if the JSON string is invalid or contains syntax errors.
 pub fn parse_with_length(json: &str, length: usize) -> Result<JsonNode> {
     let truncated = if json.len() > length {
         &json[..length]

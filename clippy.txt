@@ -1,0 +1,81 @@
+    Checking lx-json v0.1.0 (/root/lingxi/LX_json/LX-json)
+warning: lint `clippy::blocks_in_if_conditions` has been renamed to `clippy::blocks_in_conditions`
+  |
+  = help: use the new name `clippy::blocks_in_conditions`
+  = note: requested on the command line with `-W clippy::blocks_in_if_conditions`
+  = note: `#[warn(renamed_and_removed_lints)]` on by default
+
+warning[E0602]: unknown lint: `clippy::blocking_op_in_async`
+  |
+  = note: requested on the command line with `-W clippy::blocking_op_in_async`
+  = note: `#[warn(unknown_lints)]` on by default
+
+warning[E0602]: unknown lint: `clippy::dangling_ptr_dereference`
+  |
+  = note: requested on the command line with `-W clippy::dangling_ptr_dereference`
+
+warning[E0602]: unknown lint: `clippy::extern_without_repr`
+  |
+  = help: did you mean: `clippy::ignore_without_reason`
+  = note: requested on the command line with `-W clippy::extern_without_repr`
+
+warning[E0602]: unknown lint: `clippy::fallible_memory_allocation`
+  |
+  = note: requested on the command line with `-W clippy::fallible_memory_allocation`
+
+warning[E0602]: unknown lint: `clippy::implicit_abi`
+  |
+  = help: did you mean: `clippy::implicit_hasher`
+  = note: requested on the command line with `-W clippy::implicit_abi`
+
+warning[E0602]: unknown lint: `clippy::invalid_char_range`
+  |
+  = help: did you mean: `clippy::invalid_regex`
+  = note: requested on the command line with `-W clippy::invalid_char_range`
+
+warning[E0602]: unknown lint: `clippy::mem_unsafe_functions`
+  |
+  = note: requested on the command line with `-W clippy::mem_unsafe_functions`
+
+warning[E0602]: unknown lint: `clippy::non_reentrant_functions`
+  |
+  = note: requested on the command line with `-W clippy::non_reentrant_functions`
+
+warning[E0602]: unknown lint: `clippy::null_ptr_dereference`
+  |
+  = note: requested on the command line with `-W clippy::null_ptr_dereference`
+
+warning[E0602]: unknown lint: `clippy::passing_string_to_c_functions`
+  |
+  = note: requested on the command line with `-W clippy::passing_string_to_c_functions`
+
+warning[E0602]: unknown lint: `clippy::ptr_double_free`
+  |
+  = note: requested on the command line with `-W clippy::ptr_double_free`
+
+warning[E0602]: unknown lint: `clippy::return_stack_address`
+  |
+  = note: requested on the command line with `-W clippy::return_stack_address`
+
+warning[E0602]: unknown lint: `clippy::unsafe_block_in_proc_macro`
+  |
+  = note: requested on the command line with `-W clippy::unsafe_block_in_proc_macro`
+
+warning[E0602]: unknown lint: `clippy::untrusted_lib_loading`
+  |
+  = note: requested on the command line with `-W clippy::untrusted_lib_loading`
+
+error: unexpected closing delimiter: `}`
+  --> src/patch.rs:50:1
+   |
+45 | pub fn generate_patches(from: &JsonNode, to: &JsonNode, _case_sensitive: bool) -> Result<JsonNode> {
+   |                                                                                                    - this opening brace...
+...
+49 | }
+   | - ...matches this closing brace
+50 | }
+   | ^ unexpected closing delimiter
+
+For more information about this error, try `rustc --explain E0602`.
+warning: `lx-json` (lib) generated 15 warnings
+error: could not compile `lx-json` (lib) due to 1 previous error; 15 warnings emitted

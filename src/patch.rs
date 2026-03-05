@@ -37,9 +37,14 @@ use crate::JsonNode;
 ///
 /// let patches = generate_patches(&from, &to, true).unwrap();
 /// ```
-pub fn generate_patches(from: &JsonNode, to: &JsonNode, case_sensitive: bool) -> Result<JsonNode> {
+///
+/// # Errors
+///
+/// Returns `JsonError` if the patch generation fails due to invalid JSON structure
+/// or if the comparison encounters an error.
+pub fn generate_patches(from: &JsonNode, to: &JsonNode, _case_sensitive: bool) -> Result<JsonNode> {
     let mut patches = Vec::new();
-    compare_and_generate("", from, to, &mut patches, case_sensitive)?;
+    compare_and_generate("", from, to, &mut patches, _case_sensitive)?;
     Ok(JsonNode::Array(patches))
 }
 
@@ -70,6 +75,13 @@ pub fn generate_patches(from: &JsonNode, to: &JsonNode, case_sensitive: bool) ->
 ///
 /// apply_patches(&mut target, &patches, true).unwrap();
 /// ```
+///
+/// # Errors
+///
+/// Returns `JsonError` if:
+/// - The patches document is not an array
+/// - A patch operation is malformed
+/// - A patch operation fails (e.g., path not found, test fails)
 pub fn apply_patches(
     target: &mut JsonNode,
     patches: &JsonNode,
@@ -112,6 +124,13 @@ pub fn apply_patches(
 ///     Some(&JsonNode::String("qux".to_string())),
 /// ).unwrap();
 /// ```
+///
+/// # Errors
+///
+/// Returns `JsonError` if:
+/// - The patches document is not an array
+/// - The operation type is invalid
+/// - The path is invalid
 pub fn add_patch_to_array(
     patches: &mut JsonNode,
     op: &str,
@@ -145,7 +164,7 @@ fn compare_and_generate(
     from: &JsonNode,
     to: &JsonNode,
     patches: &mut Vec<JsonNode>,
-    case_sensitive: bool,
+    _case_sensitive: bool,
 ) -> Result<()> {
     match (from, to) {
         // Both null - no change needed
@@ -182,7 +201,7 @@ fn compare_and_generate(
 
             for i in 0..len_a.min(len_b) {
                 let new_path = format!("{}/{}", path, i);
-                compare_and_generate(&new_path, &arr_a[i], &arr_b[i], patches, case_sensitive)?;
+                compare_and_generate(&new_path, &arr_a[i], &arr_b[i], patches, _case_sensitive)?;
             }
 
             // Handle removal of extra elements
@@ -192,9 +211,9 @@ fn compare_and_generate(
             }
 
             // Handle addition of new elements
-            for i in len_a..len_b {
-                let new_path = format!("{}/{}", path, i);
-                patches.push(generate_add_patch(&new_path, &arr_b[i])?);
+            for (offset, item) in arr_b.iter().skip(len_a).enumerate() {
+                let new_path = format!("{}/{}", path, len_a.wrapping_add(offset));
+                patches.push(generate_add_patch(&new_path, item)?);
             }
 
             Ok(())
@@ -223,7 +242,7 @@ fn compare_and_generate(
                 let new_path = format!("{}/{}", path, escape_pointer(key));
                 if let Some(val_a) = map_a.get(key) {
                     let val_b = &map_b[key];
-                    compare_and_generate(&new_path, val_a, val_b, patches, case_sensitive)?;
+                    compare_and_generate(&new_path, val_a, val_b, patches, _case_sensitive)?;
                 } else {
                     patches.push(generate_add_patch(&new_path, &map_b[key])?);
                 }

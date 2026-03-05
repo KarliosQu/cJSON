@@ -15,6 +15,10 @@ use crate::JsonNode;
 /// * `patch` - The JSON Merge Patch document
 /// * `case_sensitive` - Whether to use case-sensitive key matching
 ///
+/// # Errors
+///
+/// Returns an error if the merge operation fails.
+///
 /// # Example
 ///
 /// ```rust
@@ -32,7 +36,7 @@ use crate::JsonNode;
 ///
 /// merge_patch(&mut target, &patch, true).unwrap();
 /// ```
-pub fn merge_patch(target: &mut JsonNode, patch: &JsonNode, case_sensitive: bool) -> Result<()> {
+pub fn merge_patch(target: &mut JsonNode, patch: &JsonNode, _case_sensitive: bool) -> Result<()> {
     match (target, patch) {
         // If patch is null, target becomes null (delete operation)
         (t, JsonNode::Null) => {
@@ -49,7 +53,7 @@ pub fn merge_patch(target: &mut JsonNode, patch: &JsonNode, case_sensitive: bool
 
             for (key, patch_value) in patch_map {
                 if let Some(target_value) = target_map.get_mut(&key) {
-                    merge_patch(target_value, &patch_value, case_sensitive)?;
+                    merge_patch(target_value, &patch_value, _case_sensitive)?;
                 } else {
                     target_map.insert(key.clone(), duplicate(&patch_value, true));
                 }

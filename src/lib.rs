@@ -30,6 +30,7 @@
 //! ```
 
 pub mod error;
+pub mod ffi;
 pub mod merge;
 pub mod parser;
 pub mod patch;
