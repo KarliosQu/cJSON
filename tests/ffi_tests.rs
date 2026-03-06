@@ -414,31 +414,7 @@ fn test_ffi_add_patch_to_array() {
     }
 }
 
-/// Test 10: lx_json_get_number_value function
-#[test]
-fn test_ffi_get_number_value() {
-    // Test with number node
-    let number_node = unsafe { lx_json_create_number(42.5) };
-    assert!(!number_node.is_null());
-    
-    let value = unsafe { lx_json_get_number_value(number_node) };
-    assert_eq!(value, 42.5, "Should get correct number value");
-    
-    unsafe { lx_json_free(number_node); }
-    
-    // Test with non-number node
-    let string_node = unsafe { lx_json_create_string(CString::new("hello").unwrap().as_ptr()) };
-    assert!(!string_node.is_null());
-    
-    let value = unsafe { lx_json_get_number_value(string_node) };
-    assert_eq!(value, 0.0, "Should return 0.0 for non-number node");
-    
-    unsafe { lx_json_free(string_node); }
-    
-    // Test with NULL node
-    let value = unsafe { lx_json_get_number_value(ptr::null()) };
-    assert_eq!(value, 0.0, "Should return 0.0 for NULL node");
-}
+
 
 /// Test 11: lx_json_get_pointer_mut function
 #[test]

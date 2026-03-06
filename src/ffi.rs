@@ -315,67 +315,7 @@ pub unsafe extern "C" fn lx_json_print(node: *mut LXJsonNode) -> *mut c_char {
     }
 }
 
-/// Print JsonNode to an unformatted string
-///
-/// # Safety
-///
-/// The `node` pointer must be either NULL or a valid pointer to a JsonNode
-/// that was created by this library. If NULL is passed, the function returns NULL.
-///
-/// The returned string must be freed with `lx_json_free_string()` when no longer needed.
-#[no_mangle]
-pub unsafe extern "C" fn lx_json_print_unformatted(node: *mut LXJsonNode) -> *mut c_char {
-    clear_last_error();
-    if node.is_null() {
-        return ptr::null_mut();
-    }
-    
-    // Safety: node is guaranteed to be non-null at this point
-    unsafe {
-        let json_node = &*(node as *mut JsonNode);
-        let result = crate::serializer::print_unformatted(json_node);
-        match CString::new(result) {
-            Ok(s) => s.into_raw(),
-            Err(_) => ptr::null_mut(),
-        }
-    }
-}
 
-/// Minify JsonNode
-///
-/// # Safety
-///
-/// The `node` pointer must be either NULL or a valid pointer to a JsonNode
-/// that was created by this library. If NULL is passed, the function returns NULL.
-///
-/// The returned string must be freed with `lx_json_free_string()` when no longer needed.
-#[no_mangle]
-pub unsafe extern "C" fn lx_json_minify(node: *mut LXJsonNode) -> *mut c_char {
-    clear_last_error();
-    if node.is_null() {
-        return ptr::null_mut();
-    }
-    
-    // Safety: node is guaranteed to be non-null at this point
-    unsafe {
-        let json_node = &*(node as *mut JsonNode);
-        let json_str = crate::serializer::print(json_node);
-        let result = crate::serializer::minify(&json_str);
-        match result {
-            Ok(minified) => match CString::new(minified) {
-                Ok(s) => s.into_raw(),
-                Err(_) => ptr::null_mut(),
-            },
-            Err(e) => {
-                set_last_error(JsonError::InvalidString {
-                    position: 0,
-                    reason: e,
-                });
-                ptr::null_mut()
-            }
-        }
-    }
-}
 
 /// Print JsonNode to string with pre-allocated buffer capacity
 ///
@@ -1484,25 +1424,7 @@ pub unsafe extern "C" fn lx_json_merge_patch(node: *mut LXJsonNode, patch: *cons
         }
     }
 }
-/// Get number value from a JSON node
-///
-/// # Safety
-///
-/// The `node` pointer must be a valid pointer to a JsonNode created by this library,
-/// or NULL. If NULL is passed, 0.0 is returned.
-///
-/// The returned value is a simple c_double and does not need to be freed.
-#[no_mangle]
-pub unsafe extern "C" fn lx_json_get_number_value(node: *const LXJsonNode) -> c_double {
-    if node.is_null() {
-        return 0.0;
-    }
-    // Safety: The pointer is guaranteed to be valid and non-null at this point
-    unsafe {
-        let json_node = &*(node as *const JsonNode);
-        crate::query::get_number_value(json_node).unwrap_or(0.0)
-    }
-}
+
 
 /// Get mutable reference using JSON Pointer
 ///

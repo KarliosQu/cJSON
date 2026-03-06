@@ -139,25 +139,7 @@ LXJsonNode* lx_json_parse_with_opts(const char* json, LXParseOptions* opts);
  */
 char* lx_json_print(LXJsonNode* node);
 
-/**
- * @brief Print JSON node to unformatted string
- * 
- * The returned string must be freed with lx_json_free_string().
- * 
- * @param node JSON node
- * @return Unformatted JSON string, or NULL on error
- */
-char* lx_json_print_unformatted(LXJsonNode* node);
 
-/**
- * @brief Minify JSON
- * 
- * The returned string must be freed with lx_json_free_string().
- * 
- * @param node JSON node
- * @return Minified JSON string, or NULL on error
- */
-char* lx_json_minify(LXJsonNode* node);
 
 /**
  * @brief Print JSON with pre-allocated buffer capacity
@@ -397,13 +379,7 @@ double lx_json_get_number(const LXJsonNode* node);
  */
 char* lx_json_get_string_value(const LXJsonNode* node);
 
-/**
- * @brief Get number value from a JSON node
- * 
- * @param node JSON node
- * @return Number value, or 0.0 if not a number
- */
-double lx_json_get_number_value(const LXJsonNode* node);
+
 
 /* ==========================================================================
  * Array Operations
