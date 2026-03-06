@@ -1,11 +1,11 @@
 use std::fmt;
 
-use crate::error::Result;
-use crate::JsonError;
+use crate::error::{JsonError, Result};
 
 /// JSON value types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum JsonNode {
+    #[default]
     Null,
     Bool(bool),
     Number(f64),
@@ -481,6 +481,10 @@ impl JsonNode {
     /// # Errors
     ///
     /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
     pub fn sort_object(&mut self, case_sensitive: bool) -> Result<()> {
         match self {
             JsonNode::Object(pairs) => {
@@ -497,11 +501,27 @@ impl JsonNode {
             }),
         }
     }
-}
 
-impl Default for JsonNode {
-    fn default() -> Self {
-        JsonNode::Null
+    /// Get the keys of an object as an array
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(JsonError::InvalidType)` if the node is not an object
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
+    pub fn get_object_keys(&self) -> Result<JsonNode> {
+        match self {
+            JsonNode::Object(pairs) => {
+                let keys: Vec<JsonNode> = pairs.iter().map(|(k, _)| JsonNode::new_string(k.clone())).collect();
+                Ok(JsonNode::Array(keys))
+            }
+            _ => Err(JsonError::InvalidType {
+                expected: "Object".to_string(),
+                found: self.type_name().to_string(),
+            }),
+        }
     }
 }
 

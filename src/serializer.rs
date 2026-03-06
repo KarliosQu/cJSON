@@ -37,7 +37,7 @@ impl Serializer {
             JsonNode::Null => result.push_str("null"),
             JsonNode::Bool(b) => result.push_str(if *b { "true" } else { "false" }),
             JsonNode::Number(n) => {
-                if n.fract() == 0.0 && *n >= i64::MIN as f64 && *n <= i64::MAX as f64 {
+                if n.fract() == 0.0_f64 && *n >= i64::MIN as f64 && *n <= i64::MAX as f64 {
                     result.push_str(&(*n as i64).to_string());
                 } else {
                     result.push_str(&n.to_string());
@@ -75,12 +75,12 @@ impl Serializer {
 
                 for (i, item) in arr.iter().enumerate() {
                     if self.formatted {
-                        self.add_indent(indent + 1, result);
+                        self.add_indent(indent.saturating_add(1), result);
                     }
 
-                    self.serialize_node(item, indent + 1, result);
+                    self.serialize_node(item, indent.saturating_add(1), result);
 
-                    if i < arr.len() - 1 {
+                    if i.checked_add(1).is_some_and(|v| v < arr.len()) {
                         result.push(',');
                     }
 
@@ -107,7 +107,7 @@ impl Serializer {
 
                 for (i, (key, value)) in pairs.iter().enumerate() {
                     if self.formatted {
-                        self.add_indent(indent + 1, result);
+                        self.add_indent(indent.saturating_add(1), result);
                     }
 
                     // Serialize key
@@ -135,9 +135,9 @@ impl Serializer {
                         result.push(':');
                     }
 
-                    self.serialize_node(value, indent + 1, result);
+                    self.serialize_node(value, indent.saturating_add(1), result);
 
-                    if i < pairs.len() - 1 {
+                    if i.checked_add(1).is_some_and(|v| v < pairs.len()) {
                         result.push(',');
                     }
 
@@ -156,19 +156,21 @@ impl Serializer {
     }
 
     fn add_indent(&self, level: usize, result: &mut String) {
-        for _ in 0..level * self.indent_size {
-            result.push(' ');
-        }
+        result.push_str(&" ".repeat(level.saturating_mul(self.indent_size)));
     }
 }
 
 /// Minify a JSON string by removing unnecessary whitespace
+///
+/// # Errors
+///
+/// Returns an error if the JSON string contains an unclosed string.
 pub fn minify(json: &str) -> Result<String, String> {
     let mut result = String::new();
     let mut in_string = false;
     let mut in_escape = false;
 
-    for (_i, c) in json.chars().enumerate() {
+    for c in json.chars() {
         match c {
             '"' if !in_escape => {
                 in_string = !in_string;
@@ -215,14 +217,18 @@ pub fn print_buffered(node: &JsonNode, prebuffer: usize, fmt: bool) -> String {
 }
 
 /// Serialize a JsonNode into a pre-allocated buffer
-/// 
+///
 /// # Arguments
 /// * `node` - The JsonNode to serialize
 /// * `buffer` - A mutable String buffer to write the result into
 /// * `fmt` - Whether to format the output with indentation
-/// 
+///
 /// # Returns
 /// Ok(()) if successful, Err(JsonError) if the buffer is too small
+///
+/// # Errors
+///
+/// This function currently always returns Ok(()) as String automatically grows.
 pub fn print_preallocated(node: &JsonNode, buffer: &mut String, fmt: bool) -> Result<(), crate::JsonError> {
     let mut serializer = Serializer::new(fmt, 2);
     buffer.clear();

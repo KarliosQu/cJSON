@@ -10,8 +10,13 @@ keywords = ["json", "parser", "serde"]
 categories = ["parser-implementations", "encoding"]
 
 [dependencies]
+libc = "0.2"
 
 [dev-dependencies]
+
+[lib]
+name = "lx_json"
+crate-type = ["rlib", "cdylib"]
 
 [profile.release]
 opt-level = 3

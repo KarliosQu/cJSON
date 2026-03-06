@@ -16,6 +16,10 @@ use crate::types::JsonNode;
 /// * `Ok(usize)` - The number of elements in the array
 /// * `Err(JsonError::InvalidType)` - If the node is not an array
 ///
+/// # Errors
+///
+/// Returns `JsonError::InvalidType` if the node is not an array.
+///
 /// # Example
 /// ```rust
 /// use lx_json::{JsonNode, get_array_size};
@@ -47,6 +51,11 @@ pub fn get_array_size(node: &JsonNode) -> Result<usize> {
 /// * `Err(JsonError::InvalidType)` - If the node is not an array
 /// * `Err(JsonError::IndexOutOfBounds)` - If the index is out of bounds
 ///
+/// # Errors
+///
+/// Returns `JsonError::InvalidType` if the node is not an array.
+/// Returns `JsonError::IndexOutOfBounds` if the index is out of bounds.
+///
 /// # Example
 /// ```rust
 /// use lx_json::{JsonNode, get_array_item};
@@ -57,7 +66,7 @@ pub fn get_array_size(node: &JsonNode) -> Result<usize> {
 /// ]);
 /// assert_eq!(get_array_item(&arr, 1).unwrap(), &JsonNode::String("hello".to_string()));
 /// ```
-pub fn get_array_item<'a>(node: &'a JsonNode, index: usize) -> Result<&'a JsonNode> {
+pub fn get_array_item(node: &JsonNode, index: usize) -> Result<&JsonNode> {
     match node {
         JsonNode::Array(arr) => arr.get(index).ok_or(JsonError::IndexOutOfBounds {
             index,
@@ -80,6 +89,11 @@ pub fn get_array_item<'a>(node: &'a JsonNode, index: usize) -> Result<&'a JsonNo
 /// * `Ok(&JsonNode)` - Reference to the value associated with the key
 /// * `Err(JsonError::InvalidType)` - If the node is not an object
 /// * `Err(JsonError::KeyNotFound)` - If the key does not exist in the object
+///
+/// # Errors
+///
+/// Returns `JsonError::InvalidType` if the node is not an object.
+/// Returns `JsonError::KeyNotFound` if the key does not exist in the object.
 ///
 /// # Example
 /// ```rust
@@ -117,6 +131,11 @@ pub fn get_object_item<'a>(node: &'a JsonNode, key: &str) -> Result<&'a JsonNode
 /// * `Ok(&JsonNode)` - Reference to the value associated with the key
 /// * `Err(JsonError::InvalidType)` - If the node is not an object
 /// * `Err(JsonError::KeyNotFound)` - If the key does not exist in the object
+///
+/// # Errors
+///
+/// Returns `JsonError::InvalidType` if the node is not an object.
+/// Returns `JsonError::KeyNotFound` if the key does not exist in the object.
 ///
 /// # Example
 /// ```rust
@@ -239,6 +258,13 @@ pub fn get_number_value(node: &JsonNode) -> Option<f64> {
 /// * `Err(JsonError::KeyNotFound)` - If an object key does not exist
 /// * `Err(JsonError::SyntaxError)` - If the pointer format is invalid
 ///
+/// # Errors
+///
+/// Returns `JsonError::SyntaxError` if the pointer is invalid.
+/// Returns `JsonError::IndexOutOfBounds` if an array index is out of bounds.
+/// Returns `JsonError::KeyNotFound` if an object key doesn't exist.
+/// Returns `JsonError::InvalidType` if trying to traverse a non-container type.
+///
 /// # JSON Pointer Format
 /// - The pointer must start with `/`
 /// - Path segments are separated by `/`
@@ -294,7 +320,7 @@ pub fn get_pointer<'a>(node: &'a JsonNode, pointer: &str) -> Result<&'a JsonNode
     let mut current = node;
 
     // Split the pointer into tokens, skipping the first empty element from the leading '/'
-    for (_i, token) in pointer.split('/').skip(1).enumerate() {
+    for token in pointer.split('/').skip(1) {
         // Unescape the token according to RFC 6901
         let token = unescape_pointer_token(token);
 
@@ -367,6 +393,13 @@ fn unescape_pointer_token(token: &str) -> String {
 /// * `Err(JsonError::KeyNotFound)` - If an object key doesn't exist
 /// * `Err(JsonError::InvalidType)` - If trying to traverse a non-container type
 ///
+/// # Errors
+///
+/// Returns `JsonError::SyntaxError` if the pointer is invalid.
+/// Returns `JsonError::IndexOutOfBounds` if an array index is out of range.
+/// Returns `JsonError::KeyNotFound` if an object key doesn't exist.
+/// Returns `JsonError::InvalidType` if trying to traverse a non-container type.
+///
 /// # Example
 /// ```rust
 /// use lx_json::{JsonNode, get_pointer_mut};
@@ -399,7 +432,7 @@ pub fn get_pointer_mut<'a>(node: &'a mut JsonNode, pointer: &str) -> Result<&'a 
         return Ok(node);
     }
 
-    let tokens: Vec<String> = pointer.split('/').skip(1).map(|t| unescape_pointer_token(t)).collect();
+    let tokens: Vec<String> = pointer.split('/').skip(1).map(unescape_pointer_token).collect();
 
     if tokens.is_empty() {
         return Err(JsonError::SyntaxError {
@@ -413,7 +446,7 @@ pub fn get_pointer_mut<'a>(node: &'a mut JsonNode, pointer: &str) -> Result<&'a 
     let mut current = node;
 
     for (i, token) in tokens.iter().enumerate() {
-        let is_last = i == tokens.len() - 1;
+        let is_last = i.checked_add(1) == Some(tokens.len());
 
         if is_last {
             // This is the last token, return the mutable reference directly
@@ -499,6 +532,13 @@ pub fn get_pointer_mut<'a>(node: &'a mut JsonNode, pointer: &str) -> Result<&'a 
 /// # Returns
 /// * `Ok(())` - Value added successfully
 /// * `Err(JsonError)` - If the path is invalid or cannot be traversed
+///
+/// # Errors
+///
+/// Returns `JsonError::SyntaxError` if the pointer is invalid.
+/// Returns `JsonError::IndexOutOfBounds` if an array index is out of range.
+/// Returns `JsonError::KeyNotFound` if an object key doesn't exist.
+/// Returns `JsonError::InvalidType` if trying to traverse a non-container type.
 pub fn add_value_at_pointer(node: &mut JsonNode, pointer: &str, value: JsonNode) -> Result<()> {
     if pointer.is_empty() {
         return Err(JsonError::SyntaxError {
@@ -521,7 +561,7 @@ pub fn add_value_at_pointer(node: &mut JsonNode, pointer: &str, value: JsonNode)
         });
     }
 
-    let tokens: Vec<String> = pointer.split('/').skip(1).map(|t| unescape_pointer_token(t)).collect();
+    let tokens: Vec<String> = pointer.split('/').skip(1).map(unescape_pointer_token).collect();
 
     if tokens.is_empty() {
         return Err(JsonError::SyntaxError {
@@ -533,7 +573,7 @@ pub fn add_value_at_pointer(node: &mut JsonNode, pointer: &str, value: JsonNode)
     let mut current = node;
 
     for (i, token) in tokens.iter().enumerate() {
-        let is_last = i == tokens.len() - 1;
+        let is_last = i.checked_add(1) == Some(tokens.len());
 
         if is_last {
             // This is the last token, set the value here
@@ -625,6 +665,13 @@ pub fn add_value_at_pointer(node: &mut JsonNode, pointer: &str, value: JsonNode)
 /// # Returns
 /// * `Ok(JsonNode)` - The removed value
 /// * `Err(JsonError)` - If the path is invalid or value doesn't exist
+///
+/// # Errors
+///
+/// Returns `JsonError::SyntaxError` if the pointer is invalid.
+/// Returns `JsonError::IndexOutOfBounds` if an array index is out of range.
+/// Returns `JsonError::KeyNotFound` if an object key doesn't exist.
+/// Returns `JsonError::InvalidType` if trying to traverse a non-container type.
 pub fn remove_at_pointer(node: &mut JsonNode, pointer: &str) -> Result<JsonNode> {
     if pointer.is_empty() {
         return Err(JsonError::SyntaxError {
@@ -647,7 +694,7 @@ pub fn remove_at_pointer(node: &mut JsonNode, pointer: &str) -> Result<JsonNode>
         });
     }
 
-    let tokens: Vec<String> = pointer.split('/').skip(1).map(|t| unescape_pointer_token(t)).collect();
+    let tokens: Vec<String> = pointer.split('/').skip(1).map(unescape_pointer_token).collect();
 
     if tokens.is_empty() {
         return Err(JsonError::SyntaxError {
@@ -688,8 +735,11 @@ pub fn remove_at_pointer(node: &mut JsonNode, pointer: &str) -> Result<JsonNode>
         }
     } else {
         // Need to traverse to parent
-        let parent_tokens = &tokens[..tokens.len() - 1];
-        let last_token = &tokens[tokens.len() - 1];
+        let (last_token, parent_tokens) = tokens.split_last()
+            .ok_or(JsonError::SyntaxError {
+                position: 0,
+                message: "Invalid pointer".to_string(),
+            })?;
 
         // Navigate to parent node
         let mut current = node;
