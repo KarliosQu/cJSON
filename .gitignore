@@ -1,2 +1,5 @@
 /target
 /aaa
+*.dll
+*.exe
+*.obj
