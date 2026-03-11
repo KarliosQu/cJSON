@@ -477,6 +477,17 @@ LXJsonNode* lx_json_get_object_item(const LXJsonNode* node, const char* key);
  * @param key Object key (null-terminated)
  * @return Object value, or NULL on error
  */
+LXJsonNode* lx_json_get_object_item_case_sensitive(const LXJsonNode* node, const char* key);
+
+/**
+ * @brief Get object item by key (case-insensitive)
+ * 
+ * The returned node must be freed with lx_json_free().
+ * 
+ * @param node JSON node (must be an object)
+ * @param key Object key (null-terminated)
+ * @return Object value, or NULL on error
+ */
 LXJsonNode* lx_json_get_object_item_case_insensitive(const LXJsonNode* node, const char* key);
 
 /**

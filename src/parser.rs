@@ -203,6 +203,42 @@ impl<'a> Parser<'a> {
             code_point = (code_point << 4_i32) | value;
         }
 
+        // Handle UTF-16 surrogate pairs
+        if (0xD800..=0xDBFF).contains(&code_point) {
+            let high = code_point;
+            // Expect \u followed by low surrogate
+            if self.consume() != Some('\\') || self.consume() != Some('u') {
+                return Err(JsonError::InvalidString {
+                    position: self.position,
+                    reason: "Expected low surrogate after high surrogate".to_string(),
+                });
+            }
+            let mut low = 0u32;
+            for _ in 0..4 {
+                let digit = self.consume().ok_or(JsonError::InvalidString {
+                    position: self.position,
+                    reason: "Unexpected end of input in surrogate pair".to_string(),
+                })?;
+                let value = digit.to_digit(16).ok_or(JsonError::InvalidString {
+                    position: self.position.wrapping_sub(1),
+                    reason: format!("Invalid hex digit '{}'", digit),
+                })?;
+                low = (low << 4) | value;
+            }
+            if !(0xDC00..=0xDFFF).contains(&low) {
+                return Err(JsonError::InvalidString {
+                    position: self.position,
+                    reason: format!("Invalid low surrogate: U+{:04X}", low),
+                });
+            }
+            code_point = ((high - 0xD800) << 10) + (low - 0xDC00) + 0x10000;
+        } else if (0xDC00..=0xDFFF).contains(&code_point) {
+            return Err(JsonError::InvalidString {
+                position: self.position,
+                reason: "Unexpected low surrogate without high surrogate".to_string(),
+            });
+        }
+
         char::from_u32(code_point).ok_or(JsonError::InvalidString {
             position: self.position,
             reason: format!("Invalid Unicode code point: {}", code_point),

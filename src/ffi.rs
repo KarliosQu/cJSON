@@ -982,6 +982,33 @@ pub unsafe extern "C" fn lx_json_get_object_item(node: *const LXJsonNode, key: *
             Ok(s) => s,
             Err(_) => return ptr::null_mut(),
         };
+        match crate::query::get_object_item(json_node, c_key) {
+            Ok(item) => Box::into_raw(Box::new(item.clone())) as *mut LXJsonNode,
+            Err(_) => ptr::null_mut(),
+        }
+    }
+}
+
+/// Get object item by key (case-sensitive)
+///
+/// # Safety
+///
+/// The `node` pointer must be either NULL or a valid pointer to a JsonNode
+/// that was created by this library. The `key` pointer must be either NULL or
+/// a valid pointer to a null-terminated C string. If either is NULL, the function returns NULL.
+///
+/// The returned node must be freed with `lx_json_free()` when no longer needed.
+#[no_mangle]
+pub unsafe extern "C" fn lx_json_get_object_item_case_sensitive(node: *const LXJsonNode, key: *const c_char) -> *mut LXJsonNode {
+    if node.is_null() || key.is_null() {
+        return ptr::null_mut();
+    }
+    unsafe {
+        let json_node = &*(node as *const JsonNode);
+        let c_key = match CStr::from_ptr(key).to_str() {
+            Ok(s) => s,
+            Err(_) => return ptr::null_mut(),
+        };
         match crate::query::get_object_item_case_sensitive(json_node, c_key) {
             Ok(item) => Box::into_raw(Box::new(item.clone())) as *mut LXJsonNode,
             Err(_) => ptr::null_mut(),
@@ -1521,6 +1548,10 @@ pub unsafe extern "C" fn lx_json_sort_object(node: *mut LXJsonNode, case_sensiti
 #[no_mangle]
 pub unsafe extern "C" fn lx_json_create_int_array(values: *const i64, len: size_t) -> *mut LXJsonNode {
     if values.is_null() {
+        // NULL with len 0 creates an empty array
+        if len == 0 {
+            return Box::into_raw(Box::new(JsonNode::create_int_array(&[]))) as *mut LXJsonNode;
+        }
         return ptr::null_mut();
     }
     // Safety: values is guaranteed to be non-null at this point

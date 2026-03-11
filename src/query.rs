@@ -298,11 +298,9 @@ pub fn get_number_value(node: &JsonNode) -> Option<f64> {
 /// assert_eq!(get_pointer(&obj, "/").unwrap(), &obj);
 /// ```
 pub fn get_pointer<'a>(node: &'a JsonNode, pointer: &str) -> Result<&'a JsonNode> {
+    // RFC 6901: empty string "" references the whole document
     if pointer.is_empty() {
-        return Err(JsonError::SyntaxError {
-            position: 0,
-            message: "JSON pointer cannot be empty".to_string(),
-        });
+        return Ok(node);
     }
 
     if !pointer.starts_with('/') {
@@ -310,11 +308,6 @@ pub fn get_pointer<'a>(node: &'a JsonNode, pointer: &str) -> Result<&'a JsonNode
             position: 0,
             message: "JSON pointer must start with '/'".to_string(),
         });
-    }
-
-    // Empty pointer "/" refers to the entire document
-    if pointer == "/" {
-        return Ok(node);
     }
 
     let mut current = node;

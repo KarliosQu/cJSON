@@ -46,32 +46,35 @@ pub fn merge_patch(target: &mut JsonNode, patch: &JsonNode, _case_sensitive: boo
 
         // If both are objects, recursively merge
         (JsonNode::Object(target_obj), JsonNode::Object(patch_obj)) => {
-            let mut target_map: std::collections::HashMap<String, JsonNode> =
-                target_obj.drain(..).collect();
-            let patch_map: std::collections::HashMap<String, JsonNode> =
-                patch_obj.iter().cloned().collect();
-
-            for (key, patch_value) in patch_map {
-                if let Some(target_value) = target_map.get_mut(&key) {
-                    merge_patch(target_value, &patch_value, _case_sensitive)?;
+            for (key, patch_value) in patch_obj.iter() {
+                if matches!(patch_value, JsonNode::Null) {
+                    // Null in patch means delete the key from target
+                    if let Some(pos) = target_obj.iter().position(|(k, _)| k == key) {
+                        target_obj.remove(pos);
+                    }
+                } else if let Some(pos) = target_obj.iter().position(|(k, _)| k == key) {
+                    // Key exists in target, recursively merge
+                    merge_patch(&mut target_obj[pos].1, patch_value, _case_sensitive)?;
                 } else {
-                    target_map.insert(key.clone(), duplicate(&patch_value, true));
+                    // Key doesn't exist in target, add it (recursively merged)
+                    let mut new_val = if matches!(patch_value, JsonNode::Object(_)) {
+                        JsonNode::Object(vec![])
+                    } else {
+                        duplicate(patch_value, true)
+                    };
+                    if matches!(patch_value, JsonNode::Object(_)) {
+                        merge_patch(&mut new_val, patch_value, _case_sensitive)?;
+                    }
+                    target_obj.push((key.clone(), new_val));
                 }
             }
-
-            // Handle null values in patch (delete operation)
-            let mut keys_to_remove = Vec::new();
-            for (key, target_value) in &target_map {
-                if let JsonNode::Null = target_value {
-                    keys_to_remove.push(key.clone());
-                }
-            }
-            for key in keys_to_remove {
-                target_map.remove(&key);
-            }
-
-            *target_obj = target_map.into_iter().collect();
             Ok(())
+        }
+
+        // For any other combination: if patch is an object, create empty object target and merge
+        (t, p @ JsonNode::Object(_)) => {
+            *t = JsonNode::Object(vec![]);
+            merge_patch(t, p, _case_sensitive)
         }
 
         // For any other combination, replace target with patch

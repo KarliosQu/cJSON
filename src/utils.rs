@@ -100,14 +100,8 @@ pub fn compare(a: &JsonNode, b: &JsonNode, case_sensitive: bool) -> bool {
         // Number values (direct comparison like cJSON)
         (JsonNode::Number(n1), JsonNode::Number(n2)) => n1 == n2,
 
-        // String values
-        (JsonNode::String(s1), JsonNode::String(s2)) => {
-            if case_sensitive {
-                s1 == s2
-            } else {
-                s1.to_lowercase() == s2.to_lowercase()
-            }
-        }
+        // String values - always case-sensitive (case_sensitive flag only affects object keys)
+        (JsonNode::String(s1), JsonNode::String(s2)) => s1 == s2,
 
         // Raw JSON values
         (JsonNode::Raw(r1), JsonNode::Raw(r2)) => {
@@ -268,10 +262,11 @@ mod tests {
 
     #[test]
     fn test_compare_case_insensitive() {
-        // Test case-insensitive comparison
+        // String values are always compared case-sensitively
+        // The case_sensitive flag only affects object keys
         let node1 = JsonNode::String("hello".to_string());
         let node2 = JsonNode::String("HELLO".to_string());
-        assert!(compare(&node1, &node2, false));
+        assert!(!compare(&node1, &node2, false));
 
         let raw1 = JsonNode::Raw("test".to_string());
         let raw2 = JsonNode::Raw("TEST".to_string());

@@ -1439,11 +1439,11 @@ static void test_2_get_object_item_edge(void)
     {
         LXJsonNode *obj = lx_json_parse("{\"One\":1}");
         if (obj) {
-            LXJsonNode *r = lx_json_get_object_item(obj, "One");
+            LXJsonNode *r = lx_json_get_object_item_case_sensitive(obj, "One");
             TEST_ASSERT(r != NULL, "S-OBJ-03a: case-sensitive exact match");
             if (r) lx_json_free(r);
 
-            LXJsonNode *r2 = lx_json_get_object_item(obj, "one");
+            LXJsonNode *r2 = lx_json_get_object_item_case_sensitive(obj, "one");
             TEST_ASSERT(r2 == NULL, "S-OBJ-03b: case-sensitive mismatch returns NULL");
             if (r2) lx_json_free(r2);
             lx_json_free(obj);
