@@ -58,8 +58,9 @@ pub fn duplicate(node: &JsonNode, recurse: bool) -> JsonNode {
 ///
 /// * `a` - First JSON node to compare
 /// * `b` - Second JSON node to compare
-/// * `case_sensitive` - If true, string comparisons are case-sensitive.
-///   If false, string comparisons are case-insensitive.
+/// * `case_sensitive` - If true, object key comparisons are case-sensitive.
+///   If false, object key comparisons are case-insensitive.
+///   String values are always compared case-sensitively regardless of this flag.
 ///
 /// # Returns
 ///
@@ -73,11 +74,9 @@ pub fn duplicate(node: &JsonNode, recurse: bool) -> JsonNode {
 /// let node1 = JsonNode::String("hello".to_string());
 /// let node2 = JsonNode::String("HELLO".to_string());
 ///
-/// // Case-sensitive comparison
+/// // String values are always case-sensitive
 /// assert!(!compare(&node1, &node2, true));
-///
-/// // Case-insensitive comparison
-/// assert!(compare(&node1, &node2, false));
+/// assert!(!compare(&node1, &node2, false));
 ///
 /// let arr1 = JsonNode::Array(vec![
 ///     JsonNode::Number(1.0),

@@ -265,12 +265,13 @@ pub fn get_number_value(node: &JsonNode) -> Option<f64> {
 /// Returns `JsonError::KeyNotFound` if an object key doesn't exist.
 /// Returns `JsonError::InvalidType` if trying to traverse a non-container type.
 ///
-/// # JSON Pointer Format
+/// # JSON Pointer Format (RFC 6901)
+/// - An empty string `""` refers to the entire document
 /// - The pointer must start with `/`
 /// - Path segments are separated by `/`
 /// - `~0` represents `~` (tilde)
 /// - `~1` represents `/` (forward slash)
-/// - An empty pointer `/` refers to the entire document
+/// - `"/"` matches a key that is the empty string `""`
 /// - Array indices are zero-based
 ///
 /// # Example
@@ -288,14 +289,14 @@ pub fn get_number_value(node: &JsonNode) -> Option<f64> {
 ///     ])),
 /// ]);
 ///
+/// // Get root (empty string = whole document)
+/// assert_eq!(get_pointer(&obj, "").unwrap(), &obj);
+///
 /// // Get nested object value
 /// assert_eq!(get_pointer(&obj, "/user/name").unwrap(), &JsonNode::String("John".to_string()));
 ///
 /// // Get array element
 /// assert_eq!(get_pointer(&obj, "/items/0").unwrap(), &JsonNode::String("item1".to_string()));
-///
-/// // Get root
-/// assert_eq!(get_pointer(&obj, "/").unwrap(), &obj);
 /// ```
 pub fn get_pointer<'a>(node: &'a JsonNode, pointer: &str) -> Result<&'a JsonNode> {
     // RFC 6901: empty string "" references the whole document
