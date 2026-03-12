@@ -501,6 +501,21 @@ cJSON 原版：`readme_examples.c`（3 个 `RUN_TEST`）+ `misc_utils_tests.c`�
 | A-11 分配失败注入 | 同上 | 低 |
 | C-04 不敏感比较（C ABI） | C ABI 未暴露 `compare_case_insensitive` 函数 | 低 |
 
+### 5.4 Rust/C 中“无该项测试”统一说明（含原因）
+
+以下汇总 cJSON 中在 Rust 原生层或 C ABI 层无法 1:1 对标、无需单独测试、或仅能以替代测试覆盖的项目。
+
+| 编号 | cJSON 测试点 | Rust 原生状态 | C ABI 状态 | 无该项测试或未 1:1 对标原因 |
+|------|-------------|---------------|------------|-----------------------------|
+| R-04 | `SetValuestring` 指针重叠 | 无等价直接测试（以 R-06 边界测试替代） | 🔶 SKIP | C 指针重叠/别名内存场景，Rust 安全接口无等价操作；C ABI 也未暴露 `set_valuestring` |
+| R-05 | `realloc` 失败注入 | 无直接测试（以 R-07 完整性替代） | 🔶 SKIP | 依赖 cJSON 分配器 hook 做故障注入；Rust 默认内存模型与 C ABI 均不支持该注入路径 |
+| A-11 | Add API 分配失败注入 | 无直接测试（改测参数/类型边界失败） | 🔶 SKIP | 同 R-05，需要可控分配失败注入机制；现有 Rust/C ABI 测试环境不可实现 |
+| R-03（循环引用子场景） | `should_not_add_itself` 等自引用防护 | 无独立对标项（通过深拷贝/变异稳定性覆盖） | 无独立对标项（`R-03` 仅做 deep copy） | Rust 所有权/借用规则天然规避大多数自引用误用；C ABI 层当前未提供可构造该类自引用的直接接口 |
+| A-07 | AddRaw / `CreateRaw` | ✅ Rust 已测 | 🔶 SKIP | C ABI 未导出 `lx_json_create_raw`，因此 C 侧无法对标该项 |
+| C-04 | 大小写不敏感比较 | ✅ Rust 已测 | 🔶 SKIP | C ABI 未暴露 case-insensitive compare 入口，C 侧无法执行该测试 |
+
+> 统计口径说明：按 97 项规范口径，Rust 为 96/97（1 项不可等价映射）；C ABI 为 97/97（含 SKIP 标注）。
+
 ---
 
 ## 六、结论
